@@ -3,9 +3,11 @@ package main
 import (
 	stdbytes "bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"path"
 	stdpath "path"
 	"strings"
 	"time"
@@ -27,20 +29,26 @@ func pv[X any](val *X) X {
 
 type detailFlags struct {
 	cmdFlags
-	verbose bool
 }
 
 func (f detailFlags) Parse(uc userConfig, o io.Writer) detailConfig {
 	var c detailConfig
 	c.cmdConfig = f.cmdFlags.Parse(uc, o)
-	c.verbose = f.verbose
 
 	return c
 }
 
+type detailMode uint8
+
+const (
+	dmDefault detailMode = iota
+	dmPath
+	dmFiles
+)
+
 type detailConfig struct {
 	cmdConfig
-	verbose bool
+	mode detailMode
 }
 
 type dpart struct {
@@ -65,7 +73,7 @@ func cmdInfo(ctx context.Context, conf detailConfig, c api.Client, id string) er
 			if err != nil {
 				return err
 			}
-			return cmdInfoTransmission(p, i, t)
+			return cmdInfoTransmission(conf.mode, p, i, t)
 		default:
 			return fmt.Errorf("unimplemeneted torrent type: %T", t)
 		}
@@ -80,10 +88,9 @@ func cmdInfo(ctx context.Context, conf detailConfig, c api.Client, id string) er
 }
 
 type detailPrinter struct {
-	o       io.Writer
-	verbose bool
-	color   bool
-	msg     struct {
+	o     io.Writer
+	color bool
+	msg   struct {
 		na, unknown, no, yes, bad string
 	}
 
@@ -96,7 +103,6 @@ func newDetailPrinter(output io.Writer, conf detailConfig) *detailPrinter {
 	p := &detailPrinter{}
 	p.o = output
 	p.color = conf.color
-	p.verbose = conf.verbose
 
 	p.msg.na = "\x00_n/a"
 	p.msg.unknown = "\x00_unknown"
@@ -253,7 +259,68 @@ func (p *detailPrinter) bytes(b int64, prec, unit bytes.Unit) bytes.Bytes {
 	return bytes.New(float64(b/int64(prec/unit)), prec).Human()
 }
 
-func cmdInfoTransmission(p *detailPrinter, i api.Info, t rpc.Torrent) error {
+func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.Torrent) error {
+	switch mode {
+	case dmDefault:
+	case dmPath:
+		list := make([]string, len(t.Files))
+		for i := range t.Files {
+			list[i] = t.Files[i].Name
+		}
+
+		p.title(1, path.Join(pv(t.DownloadDir), commonAncestor(list)))
+		return nil
+	case dmFiles:
+		l := 0
+		for _, f := range t.Files {
+			_, name := stdpath.Split(f.Name)
+			if rw := runewidth.StringWidth(name); rw > l {
+				l = rw
+			}
+		}
+
+		format := fmt.Sprintf(
+			"%%0%dd | %%s",
+			int(math.Ceil(math.Log10(float64(len(t.Files))))),
+		)
+
+		var cdir string
+		for i, f := range t.Files {
+			dir, name := stdpath.Split("/" + f.Name)
+			if dir != cdir {
+				cdir = dir
+				p.title(1, dir)
+			}
+			fs := t.FileStats[i]
+			n := fmt.Sprintf(format, i, runewidth.FillRight(name, l))
+			if !fs.Wanted {
+				p.prints(1, n, p.msg.no)
+				continue
+			}
+
+			prio := "normal"
+			switch fs.Priority {
+			case 1:
+				prio = "high"
+			case -1:
+				prio = "low"
+			}
+			bh := p.bytes(f.BytesCompleted, bytes.B, bytes.B)
+			bt := p.bytes(f.Length, bytes.B, bytes.B)
+			bh = bh.Convert(bt.Unit())
+
+			var pct int64
+			if f.Length != 0 {
+				pct = f.BytesCompleted * 100 / f.Length
+			}
+			p.printf(1, n, "%s %6s %6.2f %10s (%3d%%)", p.msg.yes, prio, bh.Value, bt.String(), pct)
+		}
+		p.nl()
+		return nil
+	default:
+		return errors.New("invalid mode")
+	}
+
 	var prio string
 	{
 		val := pv(t.BandwidthPriority)
@@ -370,9 +437,6 @@ func cmdInfoTransmission(p *detailPrinter, i api.Info, t rpc.Torrent) error {
 	p.title(1, "Meta")
 	p.printv(1, "id       ", pv(t.ID))
 	p.prints(1, "name     ", pv(t.Name))
-	if p.verbose {
-		p.prints(1, "magnet   ", pv(t.MagnetLink))
-	}
 	p.prints(1, "mime     ", pv(t.PrimaryMimeType))
 	p.prints(1, "labels   ", strings.Join(t.Labels, ", "))
 	p.prints(1, "priority ", prio)
@@ -451,53 +515,6 @@ func cmdInfoTransmission(p *detailPrinter, i api.Info, t rpc.Torrent) error {
 	p.title(2, "seed ratio")
 	p.prints(2, "honors globals", honorsSeedRatio)
 	p.prints(2, "limit         ", ratioLimit)
-	p.nl()
-
-	p.title(1, "Files")
-	l := 0
-	for _, f := range t.Files {
-		_, name := stdpath.Split(f.Name)
-		if rw := runewidth.StringWidth(name); rw > l {
-			l = rw
-		}
-	}
-
-	format := fmt.Sprintf(
-		"%%0%dd | %%s",
-		int(math.Ceil(math.Log10(float64(len(t.Files))))),
-	)
-
-	var cdir string
-	for i, f := range t.Files {
-		dir, name := stdpath.Split("/" + f.Name)
-		if dir != cdir {
-			cdir = dir
-			p.title(2, dir)
-		}
-		fs := t.FileStats[i]
-		n := fmt.Sprintf(format, i, runewidth.FillRight(name, l))
-		if !fs.Wanted {
-			p.prints(2, n, p.msg.no)
-			continue
-		}
-
-		prio = "normal"
-		switch fs.Priority {
-		case 1:
-			prio = "high"
-		case -1:
-			prio = "low"
-		}
-		bh := p.bytes(f.BytesCompleted, bytes.B, bytes.B)
-		bt := p.bytes(f.Length, bytes.B, bytes.B)
-		bh = bh.Convert(bt.Unit())
-
-		var pct int64
-		if f.Length != 0 {
-			pct = f.BytesCompleted * 100 / f.Length
-		}
-		p.printf(2, n, "%s %6s %6.2f %10s (%3d%%)", p.msg.yes, prio, bh.Value, bt.String(), pct)
-	}
 	p.nl()
 
 	return nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -203,4 +204,29 @@ func parseUserTime(input string, eod bool) (time.Time, error) {
 	}
 
 	return dt, err
+}
+
+func commonAncestor(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+
+	common := paths[0]
+	for i := 1; i < len(paths); i++ {
+		for {
+			if common == "" {
+				return ""
+			} else if strings.HasPrefix(paths[i], common) {
+				break
+			} else if common == "/" {
+				return ""
+			}
+			common, _ = path.Split(common)
+			if len(common) > 1 {
+				common = common[:len(common)-1]
+			}
+		}
+	}
+
+	return common
 }

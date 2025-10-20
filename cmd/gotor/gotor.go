@@ -104,13 +104,9 @@ func saveUserConfig(path string, c userConfig) error {
 }
 
 func main() {
-	// TODO global stats (limits, ...)
-	// TODO cache downloaddir? and the above... perhaps
 	// TODO sorts
-	// TODO info
 	// TODO move
 	// TODO verify
-	// TODO remove
 
 	me := os.Args[0]
 	out := os.Stdout
@@ -216,7 +212,34 @@ Separete with a comma to match multiple.`)
 		Handler(defaultHandler)
 
 	var detailFlags detailFlags
-	fr.Add("info").Description("get torrent details").
+	doInfo := func(set *flags.Set, args []string, mode detailMode) error {
+		if len(args) != 1 {
+			set.Usage(1)
+		}
+
+		c, userConf, err := client(detailFlags.cmdFlags)
+		if err != nil {
+			return err
+		}
+		conf := detailFlags.Parse(userConf, out)
+		conf.mode = mode
+
+		err = cmdInfo(
+			context.Background(),
+			conf,
+			c,
+			args[0],
+		)
+
+		if errors.As(err, &api.ErrNoSuchTorrent{}) {
+			fmt.Fprintln(os.Stderr, "no such torrent")
+			os.Exit(1)
+		}
+
+		return err
+	}
+
+	info := fr.Add("info").Description("show torrent info").
 		Help(func(w io.Writer) {
 			fmt.Fprintln(w, "- argument 1: the torrent id")
 		}).
@@ -224,32 +247,33 @@ Separete with a comma to match multiple.`)
 			c := &detailFlags.cmdFlags
 			flagsDefault(f, c)
 			flagsColor(f, c)
-			f.BoolVar(&detailFlags.verbose, "v", false, "Be verbose")
 		}).
 		Handler(func(set *flags.Set, args []string) error {
-			if len(args) != 1 {
-				set.Usage(1)
-			}
+			return doInfo(set, args, dmDefault)
+		})
 
-			c, userConf, err := client(detailFlags.cmdFlags)
-			if err != nil {
-				return err
-			}
-			conf := detailFlags.Parse(userConf, out)
+	info.Add("path").Description("show torrent file path").
+		Help(func(w io.Writer) {
+			fmt.Fprintln(w, "- argument 1: the torrent id")
+		}).
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, &detailFlags.cmdFlags)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			return doInfo(set, args, dmPath)
+		})
 
-			err = cmdInfo(
-				context.Background(),
-				conf,
-				c,
-				args[0],
-			)
-
-			if errors.As(err, &api.ErrNoSuchTorrent{}) {
-				fmt.Fprintln(os.Stderr, "no such torrent")
-				os.Exit(1)
-			}
-
-			return err
+	info.Add("files").Description("show torrent file info").
+		Help(func(w io.Writer) {
+			fmt.Fprintln(w, "- argument 1: the torrent id")
+		}).
+		Define(func(f *flag.FlagSet) {
+			c := &detailFlags.cmdFlags
+			flagsDefault(f, c)
+			flagsColor(f, c)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			return doInfo(set, args, dmFiles)
 		})
 
 	var removeFlags removeFlags
