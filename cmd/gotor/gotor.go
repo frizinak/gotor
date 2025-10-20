@@ -104,7 +104,6 @@ func saveUserConfig(path string, c userConfig) error {
 }
 
 func main() {
-	// TODO sorts
 	// TODO move
 	// TODO verify
 
@@ -256,9 +255,10 @@ Separete with a comma to match multiple.`,
 				&listFlags.sortFlags.sort,
 				"sort",
 				"added",
-				`Sort field:
-one of id, name, added, updated, status, download, upload, done, size or have,
-optionally prefixed with a ^ or ! to changed the sort order from asc to desc.`,
+				`Sort field.
+Use any of id, name, added, updated, status, download, upload, done, size and
+have, separated by a comma. Reverse the sort order of any field byte prefixing
+it with a ^ or !.`,
 			)
 
 		}).

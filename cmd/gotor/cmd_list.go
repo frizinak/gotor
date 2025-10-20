@@ -203,44 +203,51 @@ func (f sortFlags) Parse() (sortConfig, error) {
 
 	c.group = !f.noGroup
 
-	var o sort
-	if len(f.sort) != 0 && (f.sort[0] == '^' || f.sort[0] == '!') {
-		f.sort = f.sort[1:]
-		o = sortDesc
+	defs := strings.Split(f.sort, ",")
+	c.sort = make([]sort, 0, len(defs))
+	for _, def := range defs {
+		def = strings.TrimSpace(def)
+
+		var s sort
+		if len(def) != 0 && (def[0] == '^' || def[0] == '!') {
+			def = def[1:]
+			s = sortDesc
+		}
+
+		switch def {
+		case "id":
+			s |= sortID
+		case "name":
+			s |= sortName
+		case "added", "add":
+			s |= sortAdded
+		case "updated", "update":
+			s |= sortUpdated
+		case "status":
+			s |= sortStatus
+		case "download", "down":
+			s |= sortDownload
+		case "upload", "up":
+			s |= sortUpload
+		case "done":
+			s |= sortDone
+		case "size":
+			s |= sortSize
+		case "have":
+			s |= sortHave
+		default:
+			return c, fmt.Errorf("'%s' is not a valid sort order", def)
+		}
+
+		c.sort = append(c.sort, s)
 	}
 
-	switch f.sort {
-	case "id":
-		c.sort = sortID
-	case "name":
-		c.sort = sortName
-	case "added", "add":
-		c.sort = sortAdded
-	case "updated", "update":
-		c.sort = sortUpdated
-	case "status":
-		c.sort = sortStatus
-	case "download", "down":
-		c.sort = sortDownload
-	case "upload", "up":
-		c.sort = sortUpload
-	case "done":
-		c.sort = sortDone
-	case "size":
-		c.sort = sortSize
-	case "have":
-		c.sort = sortHave
-	default:
-		return c, fmt.Errorf("'%s' is not a valid sort order", f.sort)
-	}
-
-	c.sort |= o
 	return c, nil
 }
 
 type sortConfig struct {
 	group bool
-	sort  sort
+	sort  []sort
 }
 
 func (s sortConfig) Sort() func(a, b api.Torrent) int {
@@ -272,6 +279,14 @@ func (s sortConfig) Sort() func(a, b api.Torrent) int {
 		sortName: func(cb cb) cb {
 			return func(a, b api.Torrent) int {
 				if n := cmp.Compare(a.Name, b.Name); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortAdded: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := a.Added.Compare(b.Added); n != 0 {
 					return n
 				}
 				return cb(a, b)
@@ -347,31 +362,35 @@ func (s sortConfig) Sort() func(a, b api.Torrent) int {
 		},
 	}
 
-	f := func(a, b api.Torrent) int {
-		if n := a.Added.Compare(b.Added); n != 0 {
-			return n
+	f := func(a, b api.Torrent) int { return 0 }
+	for i := len(s.sort) - 1; i >= 0; i-- {
+		s := s.sort[i]
+		rev := s&sortDesc != 0
+		if w := cbs[s & ^sortDesc]; w != nil {
+			if rev {
+				f = fReverse(f)
+			}
+			f = w(f)
 		}
-		return cmp.Compare(a.SortID, b.SortID)
-	}
-
-	rev := s.sort&sortDesc != 0
-
-	if w := cbs[s.sort & ^sortDesc]; w != nil {
 		if rev {
 			f = fReverse(f)
 		}
-		f = w(f)
-	}
-
-	if rev {
-		f = fReverse(f)
 	}
 
 	if s.group {
 		f = fGroup(f)
 	}
 
-	return f
+	return func(a, b api.Torrent) int {
+		if n := f(a, b); n != 0 {
+			return n
+		}
+
+		if n := a.Added.Compare(b.Added); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.SortID, b.SortID)
+	}
 }
 
 type filterFlags struct {
