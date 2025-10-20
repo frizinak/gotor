@@ -22,7 +22,7 @@ func (f removeFlags) Parse(uc userConfig, o io.Writer) (removeConfig, error) {
 	var err error
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
 	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
-	conf.filters, err = f.filterFlags.Parse(uc, o)
+	conf.filters, err = f.filterFlags.Parse()
 	conf.print = newPrinter(80, !f.noColor, false)
 	conf.deleteData = f.deleteData
 	conf.yes = f.yes

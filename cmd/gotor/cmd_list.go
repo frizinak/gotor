@@ -186,7 +186,7 @@ type filterFlags struct {
 	updated [2]string
 }
 
-func (f filterFlags) Parse(uc userConfig, o io.Writer) (filterConfig, error) {
+func (f filterFlags) Parse() (filterConfig, error) {
 	var conf filterConfig
 	if f, ok := intRange(f.id); ok {
 		conf.id = make(map[string]struct{}, len(f))
@@ -270,7 +270,7 @@ func (f listFlags) Parse(uc userConfig, o io.Writer) (listConfig, error) {
 	var err error
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
 	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
-	conf.filters, err = f.filterFlags.Parse(uc, o)
+	conf.filters, err = f.filterFlags.Parse()
 	if err != nil {
 		return conf, err
 	}
