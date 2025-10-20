@@ -271,6 +271,17 @@ Separete with a comma to match multiple.`)
 			return doInfo(set, args, dmFiles)
 		})
 
+	info.Add("magnet").Description("show the magnet link").
+		Help(func(w io.Writer) {
+			fmt.Fprintln(w, "- argument 1: the torrent id")
+		}).
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, cmdFlags)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			return doInfo(set, args, dmMagnet)
+		})
+
 	removeFlags := removeFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
 	fr.Add("remove", "delete").Description("remove torrents").
 		Define(func(f *flag.FlagSet) {

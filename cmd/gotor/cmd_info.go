@@ -44,6 +44,7 @@ const (
 	dmDefault detailMode = iota
 	dmPath
 	dmFiles
+	dmMagnet
 )
 
 type detailConfig struct {
@@ -316,6 +317,9 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 			p.printf(1, n, "%s %6s %6.2f %10s (%3d%%)", p.msg.yes, prio, bh.Value, bt.String(), pct)
 		}
 		p.nl()
+		return nil
+	case dmMagnet:
+		p.title(1, pv(t.MagnetLink))
 		return nil
 	default:
 		return errors.New("invalid mode")
