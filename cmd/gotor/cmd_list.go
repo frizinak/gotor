@@ -258,9 +258,9 @@ func (f filterFlags) Parse(uc userConfig, o io.Writer) (filterConfig, error) {
 }
 
 type listFlags struct {
-	cmdFlags
+	*cmdFlags
+	*filterFlags
 	downloadDirFlags
-	filters    filterFlags
 	watch      float64
 	hideErrors bool
 }
@@ -270,7 +270,7 @@ func (f listFlags) Parse(uc userConfig, o io.Writer) (listConfig, error) {
 	var err error
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
 	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
-	conf.filters, err = f.filters.Parse(uc, o)
+	conf.filters, err = f.filterFlags.Parse(uc, o)
 	if err != nil {
 		return conf, err
 	}

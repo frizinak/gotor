@@ -10,8 +10,8 @@ import (
 )
 
 type removeFlags struct {
-	cmdFlags
-	filterFlags
+	*cmdFlags
+	*filterFlags
 	downloadDirFlags
 	deleteData bool
 	yes        bool

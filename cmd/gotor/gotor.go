@@ -157,7 +157,7 @@ func main() {
 		f.StringVar(&flags.added[0], "added-since", "",
 			`Filter added since this date.
 Format "YYYY-MM-DD hh:mm:ss"
-where either the date or the time and/or the seconds / year can be omitted.`)
+where either the date or the time and/or seconds and/or year can be omitted.`)
 		f.StringVar(&flags.added[1], "added-until", "",
 			`Filter added before this date. See -added-since.`)
 		f.StringVar(&flags.updated[0], "updated-since", "",
@@ -179,45 +179,42 @@ Separete with a comma to match multiple.`)
 		f.StringVar(&flags.name, "n", "", "Filter names with a perl regex")
 	}
 
-	var listFlags listFlags
-	defaultDefine := func(f *flag.FlagSet) {
-		c := &listFlags.cmdFlags
-		flagsDefault(f, c)
-		flagsColor(f, c)
-		flagsFilters(f, &listFlags.filters)
+	cmdFlags := &cmdFlags{}
+	filterFlags := &filterFlags{}
 
-		f.BoolVar(&listFlags.hideErrors, "E", false, "Hide error messages")
-		f.Float64Var(&listFlags.watch, "w", 0, "Continuously query at the given interval in seconds")
-	}
-	defaultHandler := func(set *flags.Set, args []string) error {
-		if len(args) != 0 {
-			set.Usage(1)
-		}
+	listFlags := listFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
+	fr := flags.NewRoot(out).
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, cmdFlags)
+			flagsColor(f, cmdFlags)
+			flagsFilters(f, filterFlags)
 
-		c, userConf, err := client(listFlags.cmdFlags)
-		if err != nil {
-			return err
-		}
-		conf, err := listFlags.Parse(userConf, out)
-		if err != nil {
-			return err
-		}
-		return cmdList(context.Background(), conf, c)
-	}
+			f.BoolVar(&listFlags.hideErrors, "E", false, "Hide torrent error messages")
+			f.Float64Var(&listFlags.watch, "w", 0, "Continuously query at the given interval in seconds")
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			if len(args) != 0 {
+				set.Usage(1)
+			}
 
-	fr := flags.NewRoot(out).Define(defaultDefine).Handler(defaultHandler)
+			c, userConf, err := client(*listFlags.cmdFlags)
+			if err != nil {
+				return err
+			}
+			conf, err := listFlags.Parse(userConf, out)
+			if err != nil {
+				return err
+			}
+			return cmdList(context.Background(), conf, c)
+		})
 
-	fr.Add("list").Description("list torrents").
-		Define(defaultDefine).
-		Handler(defaultHandler)
-
-	var detailFlags detailFlags
+	detailFlags := detailFlags{cmdFlags: cmdFlags}
 	doInfo := func(set *flags.Set, args []string, mode detailMode) error {
 		if len(args) != 1 {
 			set.Usage(1)
 		}
 
-		c, userConf, err := client(detailFlags.cmdFlags)
+		c, userConf, err := client(*detailFlags.cmdFlags)
 		if err != nil {
 			return err
 		}
@@ -244,9 +241,8 @@ Separete with a comma to match multiple.`)
 			fmt.Fprintln(w, "- argument 1: the torrent id")
 		}).
 		Define(func(f *flag.FlagSet) {
-			c := &detailFlags.cmdFlags
-			flagsDefault(f, c)
-			flagsColor(f, c)
+			flagsDefault(f, cmdFlags)
+			flagsColor(f, cmdFlags)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			return doInfo(set, args, dmDefault)
@@ -257,7 +253,7 @@ Separete with a comma to match multiple.`)
 			fmt.Fprintln(w, "- argument 1: the torrent id")
 		}).
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, &detailFlags.cmdFlags)
+			flagsDefault(f, cmdFlags)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			return doInfo(set, args, dmPath)
@@ -268,19 +264,18 @@ Separete with a comma to match multiple.`)
 			fmt.Fprintln(w, "- argument 1: the torrent id")
 		}).
 		Define(func(f *flag.FlagSet) {
-			c := &detailFlags.cmdFlags
-			flagsDefault(f, c)
-			flagsColor(f, c)
+			flagsDefault(f, cmdFlags)
+			flagsColor(f, cmdFlags)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			return doInfo(set, args, dmFiles)
 		})
 
-	var removeFlags removeFlags
+	removeFlags := removeFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
 	fr.Add("remove", "delete").Description("remove torrents").
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, &removeFlags.cmdFlags)
-			flagsFilters(f, &removeFlags.filterFlags)
+			flagsDefault(f, cmdFlags)
+			flagsFilters(f, filterFlags)
 			f.BoolVar(&removeFlags.deleteData, "delete", false, "also delete data")
 			f.BoolVar(&removeFlags.yes, "yes", false, "answer yes to all dheletion prompts")
 		}).
@@ -289,7 +284,7 @@ Separete with a comma to match multiple.`)
 				set.Usage(1)
 			}
 
-			c, userConf, err := client(removeFlags.cmdFlags)
+			c, userConf, err := client(*removeFlags.cmdFlags)
 			if err != nil {
 				return err
 			}
@@ -366,10 +361,10 @@ Separete with a comma to match multiple.`)
 			return cmdAdd(context.Background(), conf, c, args[1:])
 		})
 
-	var configCreateFlags cmdFlags
+	configCreateFlags := cmdFlags
 	fr.Add("config").Add("create").Description("create default config file").
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, &configCreateFlags)
+			flagsDefault(f, configCreateFlags)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			if len(args) != 0 {

@@ -28,7 +28,7 @@ func pv[X any](val *X) X {
 }
 
 type detailFlags struct {
-	cmdFlags
+	*cmdFlags
 }
 
 func (f detailFlags) Parse(uc userConfig, o io.Writer) detailConfig {
