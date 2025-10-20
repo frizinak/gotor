@@ -93,18 +93,18 @@ func (s Status) Or(status Status) bool {
 }
 
 const (
-	StatusStalled Status = 1 << iota
+	StatusError Status = 1 << iota
+	StatusStalled
 	StatusIdle
 	StatusStopped
-	StatusChecking
 	StatusMeta
+	StatusChecking
 	StatusDownloadQueue
 	StatusSeedQueue
 	StatusSeeding
 	StatusDownloading
 	StatusDownloaded
 	StatusFinished
-	StatusError
 )
 
 var statusNames = map[Status]string{
@@ -139,6 +139,8 @@ var statusOrder = []Status{
 
 type Torrent struct {
 	ID     string
+	SortID string
+
 	Name   string
 	Path   string
 	Magnet string

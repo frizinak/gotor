@@ -120,7 +120,8 @@ func main() {
 		conf, err := loadUserConfig(confPath)
 		if os.IsNotExist(err) {
 			return nil, conf, fmt.Errorf(
-				"No config file found at '%s'.\nYou can use the `%s config create` to create one",
+				`No config file found at '%s'.
+You can use the '%s config create' to create one`,
 				confPath,
 				me,
 			)
@@ -146,7 +147,12 @@ func main() {
 		}
 		defaultConfPath = filepath.Join(dir, "gotor", "config.json")
 
-		f.StringVar(&flags.config, "c", defaultConfPath, "path to the config file")
+		f.StringVar(
+			&flags.config,
+			"c",
+			defaultConfPath,
+			"path to the config file",
+		)
 	}
 
 	flagsColor := func(f *flag.FlagSet, flags *cmdFlags) {
@@ -154,43 +160,107 @@ func main() {
 	}
 
 	flagsFilters := func(f *flag.FlagSet, flags *filterFlags) {
-		f.StringVar(&flags.added[0], "added-since", "",
+		f.StringVar(
+			&flags.added[0],
+			"added-since",
+			"",
 			`Filter added since this date.
 Format "YYYY-MM-DD hh:mm:ss"
-where either the date or the time and/or seconds and/or year can be omitted.`)
-		f.StringVar(&flags.added[1], "added-until", "",
-			`Filter added before this date. See -added-since.`)
-		f.StringVar(&flags.updated[0], "updated-since", "",
-			`Filter updated since this date. See -added-since.`)
-		f.StringVar(&flags.updated[1], "updated-until", "",
-			`Filter updtaed until this date. See -added-since.`)
+where either the date or the time and/or seconds and/or year can be omitted.`,
+		)
 
-		f.Var(&flags.status, "s",
+		f.StringVar(
+			&flags.added[1],
+			"added-until",
+			"",
+			`Filter added before this date. See -added-since.`,
+		)
+
+		f.StringVar(
+			&flags.updated[0],
+			"updated-since",
+			"",
+			`Filter updated since this date. See -added-since.`,
+		)
+
+		f.StringVar(
+			&flags.updated[1],
+			"updated-until",
+			"",
+			`Filter updated until this date. See -added-since.`,
+		)
+
+		f.Var(
+			&flags.status,
+			"s",
 			`Filter statuses.
 Use any of stall, stop, queue, down, seed, done, check, have, meta and error.
 Match multiple statuses by separating them with a comma. Negate with ^ or !.
-Specify this flag multiple times to filter multiple statuses.`)
-		f.StringVar(&flags.id, "i", "",
+Specify this flag multiple times to filter multiple statuses.`,
+		)
+
+		f.StringVar(
+			&flags.id,
+			"i",
+			"",
 			`Filter id.
-Separate multiple values with a comma and specify ranges with a dash`)
-		f.StringVar(&flags.path, "p", "",
+Separate multiple values with a comma and specify ranges with a dash`,
+		)
+		f.StringVar(
+			&flags.path,
+			"p",
+			"",
 			`Filter paths.
-Separete with a comma to match multiple.`)
+Separete with a comma to match multiple.`,
+		)
 		f.StringVar(&flags.name, "n", "", "Filter names with a perl regex")
 	}
 
 	cmdFlags := &cmdFlags{}
 	filterFlags := &filterFlags{}
 
-	listFlags := listFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
+	listFlags := listFlags{
+		cmdFlags:    cmdFlags,
+		filterFlags: filterFlags,
+		sortFlags:   &sortFlags{},
+	}
+
 	fr := flags.NewRoot(out).
 		Define(func(f *flag.FlagSet) {
 			flagsDefault(f, cmdFlags)
 			flagsColor(f, cmdFlags)
 			flagsFilters(f, filterFlags)
 
-			f.BoolVar(&listFlags.hideErrors, "E", false, "Hide torrent error messages")
-			f.Float64Var(&listFlags.watch, "w", 0, "Continuously query at the given interval in seconds")
+			f.BoolVar(
+				&listFlags.hideErrors,
+				"E",
+				false,
+				"Hide torrent error messages",
+			)
+
+			f.Float64Var(
+				&listFlags.watch,
+				"w",
+				0,
+				"Continuously query at the given interval in seconds",
+			)
+
+			f.BoolVar(
+				&listFlags.sortFlags.noGroup,
+				"G",
+				false,
+				"Disable grouping",
+			)
+
+			f.StringVar(
+				&listFlags.sortFlags.sort,
+				"sort",
+				"added",
+				`Sort field:
+one of id, name, added, updated, status, download, upload, done, size or have,
+optionally prefixed with a ^ or ! to changed the sort order from asc to desc.`,
+			)
+
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			if len(args) != 0 {
@@ -287,8 +357,20 @@ Separete with a comma to match multiple.`)
 		Define(func(f *flag.FlagSet) {
 			flagsDefault(f, cmdFlags)
 			flagsFilters(f, filterFlags)
-			f.BoolVar(&removeFlags.deleteData, "delete", false, "also delete data")
-			f.BoolVar(&removeFlags.yes, "yes", false, "answer yes to all dheletion prompts")
+
+			f.BoolVar(
+				&removeFlags.deleteData,
+				"delete",
+				false,
+				"also delete data",
+			)
+
+			f.BoolVar(
+				&removeFlags.yes,
+				"yes",
+				false,
+				"answer yes to all dheletion prompts",
+			)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			if len(args) != 0 {
@@ -317,7 +399,13 @@ Separete with a comma to match multiple.`)
 	fr.Add("stats").Description("monitor stats").
 		Define(func(f *flag.FlagSet) {
 			flagsDefault(f, &statsFlags.cmdFlags)
-			f.Float64Var(&statsFlags.watch, "w", 0, "Continuously query at the given interval in seconds")
+
+			f.Float64Var(
+				&statsFlags.watch,
+				"w",
+				0,
+				"Continuously query at the given interval in seconds",
+			)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			if len(args) != 0 {

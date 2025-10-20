@@ -177,6 +177,203 @@ func (p *printer) print(zebra bool, t api.Torrent) {
 
 const maxPeers = 99
 
+type sort uint16
+
+const (
+	sortID sort = 1 << iota
+	sortName
+	sortAdded
+	sortUpdated
+	sortStatus
+	sortDownload
+	sortUpload
+	sortDone
+	sortSize
+	sortHave
+	sortDesc
+)
+
+type sortFlags struct {
+	noGroup bool
+	sort    string
+}
+
+func (f sortFlags) Parse() (sortConfig, error) {
+	var c sortConfig
+
+	c.group = !f.noGroup
+
+	var o sort
+	if len(f.sort) != 0 && (f.sort[0] == '^' || f.sort[0] == '!') {
+		f.sort = f.sort[1:]
+		o = sortDesc
+	}
+
+	switch f.sort {
+	case "id":
+		c.sort = sortID
+	case "name":
+		c.sort = sortName
+	case "added", "add":
+		c.sort = sortAdded
+	case "updated", "update":
+		c.sort = sortUpdated
+	case "status":
+		c.sort = sortStatus
+	case "download", "down":
+		c.sort = sortDownload
+	case "upload", "up":
+		c.sort = sortUpload
+	case "done":
+		c.sort = sortDone
+	case "size":
+		c.sort = sortSize
+	case "have":
+		c.sort = sortHave
+	default:
+		return c, fmt.Errorf("'%s' is not a valid sort order", f.sort)
+	}
+
+	c.sort |= o
+	return c, nil
+}
+
+type sortConfig struct {
+	group bool
+	sort  sort
+}
+
+func (s sortConfig) Sort() func(a, b api.Torrent) int {
+	type cb func(a, b api.Torrent) int
+
+	fReverse := func(cb cb) cb {
+		return func(a, b api.Torrent) int { return cb(b, a) }
+	}
+
+	fGroup := func(cb cb) cb {
+		return func(a, b api.Torrent) int {
+			if n := cmp.Compare(a.Path, b.Path); n != 0 {
+				return n
+			}
+
+			return cb(a, b)
+		}
+	}
+
+	cbs := map[sort]func(cb cb) cb{
+		sortID: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.SortID, b.SortID); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortName: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.Name, b.Name); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortUpdated: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := a.Updated.Compare(b.Updated); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortStatus: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if a.Status == b.Status {
+					return cb(a, b)
+				}
+
+				for i := 0; i < 5; i++ {
+					las, lbs := a.Status&-a.Status, b.Status&-b.Status
+					a.Status, b.Status = a.Status-las, b.Status-lbs
+					if n := cmp.Compare(las, lbs); n != 0 {
+						return n
+					}
+					if a.Status == 0 {
+						return 0
+					}
+				}
+
+				return 0
+			}
+		},
+		sortDownload: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.DownloadSpeed.Value, b.DownloadSpeed.Value); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortUpload: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.UploadSpeed.Value, b.UploadSpeed.Value); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortDone: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.Done, b.Done); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortSize: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.Total.Value, b.Total.Value); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortHave: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.Have.Value, b.Have.Value); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+	}
+
+	f := func(a, b api.Torrent) int {
+		if n := a.Added.Compare(b.Added); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.SortID, b.SortID)
+	}
+
+	rev := s.sort&sortDesc != 0
+
+	if w := cbs[s.sort & ^sortDesc]; w != nil {
+		if rev {
+			f = fReverse(f)
+		}
+		f = w(f)
+	}
+
+	if rev {
+		f = fReverse(f)
+	}
+
+	if s.group {
+		f = fGroup(f)
+	}
+
+	return f
+}
+
 type filterFlags struct {
 	id      string
 	name    string
@@ -260,6 +457,7 @@ func (f filterFlags) Parse() (filterConfig, error) {
 type listFlags struct {
 	*cmdFlags
 	*filterFlags
+	*sortFlags
 	downloadDirFlags
 	watch      float64
 	hideErrors bool
@@ -271,6 +469,10 @@ func (f listFlags) Parse(uc userConfig, o io.Writer) (listConfig, error) {
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
 	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
 	conf.filters, err = f.filterFlags.Parse()
+	if err != nil {
+		return conf, err
+	}
+	conf.sort, err = f.sortFlags.Parse()
 	if err != nil {
 		return conf, err
 	}
@@ -375,6 +577,7 @@ type listConfig struct {
 	downloadDirConfig
 	print   *printer
 	filters filterConfig
+	sort    sortConfig
 	sleep   time.Duration
 	errors  bool
 }
@@ -445,15 +648,7 @@ func cmdList(ctx context.Context, conf listConfig, c api.Client) error {
 			}
 
 			l.d = lastRun
-			slices.SortStableFunc(l.l, func(a, b api.Torrent) int {
-				if n := cmp.Compare(a.Path, b.Path); n != 0 {
-					return n
-				}
-				if n := a.Added.Compare(b.Added); n != 0 {
-					return n
-				}
-				return cmp.Compare(a.ID, b.ID)
-			})
+			slices.SortStableFunc(l.l, conf.sort.Sort())
 			tch <- l
 			if conf.sleep == 0 {
 				break
@@ -490,7 +685,7 @@ main:
 			}
 
 			zebra = !zebra
-			if t.Path != lastPath {
+			if t.Path != lastPath && conf.sort.group {
 				fmt.Fprintf(
 					conf.print.writer,
 					"%s %s %s",

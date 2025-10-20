@@ -325,6 +325,7 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 	sizeWhenDone := pv(t.SizeWhenDone)
 	ti := api.Torrent{
 		ID:     strconv.FormatInt(pv(t.ID), 10),
+		SortID: fmt.Sprintf("%06d", pv(t.ID)),
 		Name:   pv(t.Name),
 		Path:   filepath.Clean(pv(t.DownloadDir)),
 		Magnet: pv(t.MagnetLink),
@@ -353,7 +354,6 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 		ti.Status |= api.StatusMeta
 	}
 
-	// TODO check
 	if sizeWhenDone != 0 && haveValid == sizeWhenDone {
 		ti.Status |= api.StatusDownloaded
 	}
