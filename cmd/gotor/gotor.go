@@ -212,47 +212,19 @@ Separete with a comma to match multiple.`,
 		f.StringVar(&flags.name, "n", "", "Filter names with a perl regex")
 	}
 
-	cmdFlags := &cmdFlags{}
-	filterFlags := &filterFlags{}
+	flagsSort := func(f *flag.FlagSet, flags *sortFlags) {
+		f.BoolVar(
+			&flags.noGroup,
+			"G",
+			false,
+			"Disable grouping",
+		)
 
-	listFlags := listFlags{
-		cmdFlags:    cmdFlags,
-		filterFlags: filterFlags,
-		sortFlags:   &sortFlags{},
-	}
-
-	fr := flags.NewRoot(out).
-		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, cmdFlags)
-			flagsColor(f, cmdFlags)
-			flagsFilters(f, filterFlags)
-
-			f.BoolVar(
-				&listFlags.hideErrors,
-				"E",
-				false,
-				"Hide torrent error messages",
-			)
-
-			f.Float64Var(
-				&listFlags.watch,
-				"w",
-				0,
-				"Continuously query at the given interval in seconds",
-			)
-
-			f.BoolVar(
-				&listFlags.sortFlags.noGroup,
-				"G",
-				false,
-				"Disable grouping",
-			)
-
-			f.StringVar(
-				&listFlags.sortFlags.sort,
-				"sort",
-				"added",
-				`Sort field.
+		f.StringVar(
+			&flags.sort,
+			"sort",
+			"added",
+			`Sort field.
 Use any of the following separated by a comma. Reverse the sort order of any
 field by prefixing it with a ^ or !.
   - id
@@ -267,6 +239,38 @@ field by prefixing it with a ^ or !.
   - ratio
   - done
   - size`,
+		)
+	}
+
+	cmdFlags := &cmdFlags{}
+	filterFlags := &filterFlags{}
+	sortFlags := &sortFlags{}
+
+	listFlags := listFlags{
+		cmdFlags:    cmdFlags,
+		filterFlags: filterFlags,
+		sortFlags:   sortFlags,
+	}
+
+	fr := flags.NewRoot(out).
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, cmdFlags)
+			flagsColor(f, cmdFlags)
+			flagsFilters(f, filterFlags)
+			flagsSort(f, sortFlags)
+
+			f.BoolVar(
+				&listFlags.hideErrors,
+				"E",
+				false,
+				"Hide torrent error messages",
+			)
+
+			f.Float64Var(
+				&listFlags.watch,
+				"w",
+				0,
+				"Continuously query at the given interval in seconds",
 			)
 
 		}).
