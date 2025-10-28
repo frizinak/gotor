@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,9 +17,22 @@ import (
 
 type flagStrs []string
 
-func (i *flagStrs) String() string { return "woo" }
+func (i *flagStrs) String() string { return "" }
 func (i *flagStrs) Set(value string) error {
 	*i = append(*i, value)
+	return nil
+}
+
+type flagRegexes []*regexp.Regexp
+
+func (i *flagRegexes) String() string { return "" }
+func (i *flagRegexes) Set(value string) error {
+	r, err := regexp.Compile("(?i)" + value)
+	if err != nil {
+		return err
+	}
+
+	*i = append(*i, r)
 	return nil
 }
 

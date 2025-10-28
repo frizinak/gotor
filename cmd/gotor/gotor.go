@@ -202,14 +202,13 @@ Specify this flag multiple times to filter multiple statuses.`,
 			`Filter id.
 Separate multiple values with a comma and specify ranges with a dash`,
 		)
-		f.StringVar(
-			&flags.path,
-			"p",
-			"",
-			`Filter paths.
-Separete with a comma to match multiple.`,
-		)
-		f.StringVar(&flags.name, "n", "", "Filter names with a perl regex")
+
+		f.Var(&flags.path, "p", "Filter paths with perl regexes")
+		f.Var(&flags.label, "l", "Filter labels with perl regexes")
+		f.Var(&flags.name, "n", "Filter names with perl regexes")
+		f.Var(&flags.pathNot, "P", "Inverse filter paths with perl regexes")
+		f.Var(&flags.labelNot, "L", "Inverse filter labels with perl regexes")
+		f.Var(&flags.nameNot, "N", "Inverse filter names with perl regexes")
 	}
 
 	flagsSort := func(f *flag.FlagSet, flags *sortFlags) {
@@ -272,7 +271,6 @@ field by prefixing it with a ^ or !.
 				0,
 				"Continuously query at the given interval in seconds",
 			)
-
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			if len(args) != 0 {

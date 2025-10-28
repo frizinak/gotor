@@ -416,10 +416,16 @@ func (s sortConfig) Sort() func(a, b api.Torrent) int {
 }
 
 type filterFlags struct {
-	id      string
-	name    string
-	path    string
-	status  flagStrs
+	id     string
+	status flagStrs
+
+	name     flagRegexes
+	path     flagRegexes
+	label    flagRegexes
+	nameNot  flagRegexes
+	pathNot  flagRegexes
+	labelNot flagRegexes
+
 	added   [2]string
 	updated [2]string
 }
@@ -433,13 +439,12 @@ func (f filterFlags) Parse() (filterConfig, error) {
 		}
 	}
 
-	if f.name != "" {
-		var err error
-		conf.name, err = regexp.Compile("(?i)" + f.name)
-		if err != nil {
-			return conf, err
-		}
-	}
+	conf.name = f.name
+	conf.path = f.path
+	conf.label = f.label
+	conf.nameNot = f.nameNot
+	conf.pathNot = f.pathNot
+	conf.labelNot = f.labelNot
 
 	dflags := []string{
 		f.added[0],
@@ -481,14 +486,6 @@ func (f filterFlags) Parse() (filterConfig, error) {
 
 		if len(ors) != 0 {
 			conf.status = append(conf.status, ors)
-		}
-	}
-
-	conf.path = make([]string, 0, len(f.path))
-	for _, p := range strings.Split(f.path, ",") {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			conf.path = append(conf.path, p)
 		}
 	}
 
@@ -543,10 +540,16 @@ func relativeTorrentPath(base, p string) string {
 }
 
 type filterConfig struct {
-	id      map[string]struct{}
-	name    *regexp.Regexp
-	status  [][]string
-	path    []string
+	id     map[string]struct{}
+	status [][]string
+
+	path     []*regexp.Regexp
+	label    []*regexp.Regexp
+	name     []*regexp.Regexp
+	pathNot  []*regexp.Regexp
+	labelNot []*regexp.Regexp
+	nameNot  []*regexp.Regexp
+
 	added   [2]*time.Time
 	updated [2]*time.Time
 }
@@ -558,11 +561,13 @@ func (f filterConfig) Match(t api.Torrent, base string) bool {
 			return false
 		}
 	}
-	if len(f.path) != 0 {
-		m := false
-		for _, pf := range f.path {
-			if pf == path || pf == t.Path ||
-				(pf == pathRoot && t.Path == base) {
+
+	{
+		m := len(f.pathNot) == 0
+		for _, r := range f.pathNot {
+			if !(t.Path == base && r.MatchString(pathRoot)) &&
+				!r.MatchString(path) &&
+				!r.MatchString(t.Path) {
 				m = true
 				break
 			}
@@ -571,11 +576,66 @@ func (f filterConfig) Match(t api.Torrent, base string) bool {
 			return false
 		}
 	}
-	if f.name != nil {
-		if !f.name.MatchString(t.Name) {
+
+	{
+		m := len(f.labelNot) == 0
+		for _, r := range f.labelNot {
+			n := true
+			for _, l := range t.Labels {
+				if r.MatchString(l) {
+					n = false
+					break
+				}
+			}
+			if n {
+				m = true
+			}
+		}
+		if !m {
 			return false
 		}
 	}
+
+	{
+		m := len(f.nameNot) == 0
+		for _, r := range f.nameNot {
+			if !r.MatchString(t.Name) {
+				m = true
+				break
+			}
+		}
+		if !m {
+			return false
+		}
+	}
+
+	for _, r := range f.path {
+		if !(t.Path == base && r.MatchString(pathRoot)) &&
+			!r.MatchString(path) &&
+			!r.MatchString(t.Path) {
+			return false
+		}
+	}
+
+	for _, r := range f.label {
+		m := false
+		for _, l := range t.Labels {
+			if r.MatchString(l) {
+				m = true
+				break
+			}
+		}
+		if !m {
+			return false
+		}
+	}
+
+	for _, r := range f.name {
+		if !r.MatchString(t.Name) {
+			return false
+		}
+	}
+
 	if f.added[0] != nil && t.Added.Before(*f.added[0]) {
 		return false
 	}
