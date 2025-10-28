@@ -149,6 +149,7 @@ type Torrent struct {
 	Have  bytes.Bytes
 	Total bytes.Bytes
 	Done  float64
+	Sent  bytes.Bytes
 	Ratio float64
 
 	Status        Status

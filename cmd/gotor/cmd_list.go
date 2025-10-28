@@ -187,9 +187,11 @@ const (
 	sortStatus
 	sortDownload
 	sortUpload
+	sortDownloaded
+	sortUploaded
+	sortRatio
 	sortDone
 	sortSize
-	sortHave
 	sortDesc
 )
 
@@ -229,12 +231,16 @@ func (f sortFlags) Parse() (sortConfig, error) {
 			s |= sortDownload
 		case "upload", "up":
 			s |= sortUpload
+		case "downloaded", "have":
+			s |= sortDownloaded
+		case "uploaded", "seeded":
+			s |= sortUploaded
+		case "ratio":
+			s |= sortRatio
 		case "done":
 			s |= sortDone
 		case "size":
 			s |= sortSize
-		case "have":
-			s |= sortHave
 		default:
 			return c, fmt.Errorf("'%s' is not a valid sort order", def)
 		}
@@ -352,9 +358,25 @@ func (s sortConfig) Sort() func(a, b api.Torrent) int {
 				return cb(a, b)
 			}
 		},
-		sortHave: func(cb cb) cb {
+		sortDownloaded: func(cb cb) cb {
 			return func(a, b api.Torrent) int {
 				if n := cmp.Compare(a.Have.Value, b.Have.Value); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortUploaded: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.Sent.Value, b.Sent.Value); n != 0 {
+					return n
+				}
+				return cb(a, b)
+			}
+		},
+		sortRatio: func(cb cb) cb {
+			return func(a, b api.Torrent) int {
+				if n := cmp.Compare(a.Ratio, b.Ratio); n != 0 {
 					return n
 				}
 				return cb(a, b)

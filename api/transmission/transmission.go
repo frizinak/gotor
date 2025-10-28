@@ -306,7 +306,7 @@ var _fields = map[string][maxEndpoints]int{
 	"trackerStats":            {detail: x, list: 0},
 	"totalSize":               {detail: x, list: 0},
 	"torrentFile":             {detail: x, list: 0},
-	"uploadedEver":            {detail: x, list: 0},
+	"uploadedEver":            {detail: x, list: x},
 	"uploadLimit":             {detail: x, list: 0},
 	"uploadLimited":           {detail: x, list: 0},
 	"uploadRatio":             {detail: x, list: x},
@@ -334,6 +334,7 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 		Have:  bytes.New(float64(haveValid/1024), bytes.KiB),
 		Total: bytes.New(float64(sizeWhenDone/1024), bytes.KiB),
 		Done:  meta/100 + pv(t.PercentDone)*.99,
+		Sent:  bytes.New(float64(pv(t.UploadedEver)/1024), bytes.KiB),
 		Ratio: ratio,
 
 		Error: pv(t.ErrorString),

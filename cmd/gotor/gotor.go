@@ -253,9 +253,20 @@ Separete with a comma to match multiple.`,
 				"sort",
 				"added",
 				`Sort field.
-Use any of id, name, added, updated, status, download, upload, done, size and
-have, separated by a comma. Reverse the sort order of any field byte prefixing
-it with a ^ or !.`,
+Use any of the following separated by a comma. Reverse the sort order of any
+field by prefixing it with a ^ or !.
+  - id
+  - name
+  - added / add
+  - updated / update
+  - status
+  - download / down
+  - upload / up
+  - downloaded / have
+  - uploaded / seeded
+  - ratio
+  - done
+  - size`,
 			)
 
 		}).
