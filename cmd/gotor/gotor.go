@@ -104,9 +104,6 @@ func saveUserConfig(path string, c userConfig) error {
 }
 
 func main() {
-	// TODO move
-	// TODO verify
-
 	me := os.Args[0]
 	out := os.Stdout
 
