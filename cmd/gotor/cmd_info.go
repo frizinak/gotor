@@ -285,6 +285,13 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 			int(math.Ceil(math.Log10(float64(len(t.Files))))),
 		)
 
+		if len(t.Files) == 0 {
+			if t.MetadataPercentComplete != nil && *t.MetadataPercentComplete < 1 {
+				return errors.New("still fetching metadata")
+			}
+			return errors.New("torrent has no files")
+		}
+
 		var cdir string
 		for i, f := range t.Files {
 			dir, name := stdpath.Split("/" + f.Name)
@@ -317,6 +324,7 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 			p.printf(1, n, "%s %6s %6.2f %10s (%3d%%)", p.msg.yes, prio, bh.Value, bt.String(), pct)
 		}
 		p.nl()
+
 		return nil
 	case dmMagnet:
 		p.title(1, pv(t.MagnetLink))
