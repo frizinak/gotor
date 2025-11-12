@@ -8,10 +8,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/frizinak/gotor/api"
 	_ "github.com/frizinak/gotor/api/transmission"
+	"github.com/frizinak/gotor/bytes"
 	"github.com/frizinak/gotor/flags"
 	"gopkg.in/yaml.v3"
 )
@@ -53,6 +56,67 @@ type downloadDirConfig struct {
 	downloadDirectory string
 }
 
+type rssFeed struct {
+	URL      string       `yaml:"url"`
+	Interval flagDuration `yaml:"interval"`
+	Timeout  flagDuration `yaml:"timeout"`
+	Tags     []string     `yaml:"tags"`
+}
+
+type rssFilter struct {
+	Disabled          bool     `yaml:"disabled"`
+	Tags              []string `yaml:"tags"`
+	Match             string   `yaml:"match"`
+	Exclude           string   `yaml:"exclude"`
+	Labels            []string `yaml:"labels"`
+	DownloadDirectory string   `yaml:"directory"`
+	MinSize           string   `yaml:"min-size"`
+	MaxSize           string   `yaml:"max-size"`
+
+	match   *regexp.Regexp
+	exclude *regexp.Regexp
+	size    struct{ min, max uint64 }
+}
+
+func (f *rssFilter) Compile() error {
+	if strings.TrimSpace(f.Match) == "" {
+		return errors.New("filters can't have an empty match definition")
+	}
+
+	var err error
+	f.match, err = regexp.Compile("(?i)" + f.Match)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(f.Exclude) != "" {
+		f.exclude, err = regexp.Compile("(?i)" + f.Exclude)
+	}
+
+	if val := strings.TrimSpace(f.MinSize); val != "" {
+		s, err := bytes.Parse(val)
+		if err != nil {
+			return err
+		}
+		f.size.min = uint64(s.Convert(bytes.B).Value)
+	}
+
+	if val := strings.TrimSpace(f.MaxSize); val != "" {
+		s, err := bytes.Parse(val)
+		if err != nil {
+			return err
+		}
+		f.size.max = uint64(s.Convert(bytes.B).Value)
+	}
+
+	return err
+}
+
+func (f *rssFilter) Test(item string, size uint64) bool {
+	return (size == 0 || (size >= f.size.min && (f.size.max == 0 || size <= f.size.max))) &&
+		f.match.MatchString(item) &&
+		(f.exclude == nil || !f.exclude.MatchString(item))
+}
+
 type userConfig struct {
 	TLS               bool               `yaml:"tls"`
 	Host              string             `yaml:"host"`
@@ -62,6 +126,8 @@ type userConfig struct {
 	RPC               string             `yaml:"rpc-path"`
 	DownloadDirectory string             `yaml:"download-dir"`
 	CacheDirectory    string             `yaml:"cache-directory"`
+	RSS               map[string]rssFeed `yaml:"rss-feeds"`
+	RSSFilters        []rssFilter        `yaml:"rss-filters"`
 }
 
 func (c userConfig) URL() string {
@@ -212,6 +278,12 @@ You can use the '%s config create' to create one`,
 
 	flagsColor := func(f *flag.FlagSet, flags *cmdFlags) {
 		f.BoolVar(&flags.noColor, "C", false, "Disable colors.")
+	}
+
+	flagsVerbose := func(f *flag.FlagSet, flags *cmdFlags) {
+		f.BoolVar(&flags.v, "v", false, "Be verbose.")
+		f.BoolVar(&flags.vv, "vv", false, "Be more verbose.")
+		f.BoolVar(&flags.vvv, "vvv", false, "Be even more verbose.")
 	}
 
 	flagsFilters := func(f *flag.FlagSet, flags *filterFlags) {
@@ -531,9 +603,29 @@ field by prefixing it with a ^ or !.
 			}
 
 			conf.downloadPath = cat
-			conf.labels = []string{cat, "gotor"}
+			conf.labels = make([]string, 0, 2)
+			conf.labels = append(conf.labels, "gotor")
+			if cat != "" {
+				conf.labels = append(conf.labels, cat)
+			}
 
 			return cmdAdd(context.Background(), conf, c, args[1:])
+		})
+
+	rssFlags := rssFlags{addFlags: &addFlags, watchFlags: watchFlags}
+	fr.Add("rss").Description("fetch RSS feeds and add torrents based on filters").
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, rssFlags.cmdFlags)
+			flagsVerbose(f, rssFlags.cmdFlags)
+			flagsWatch(f, rssFlags.watchFlags)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			c, userConf, err := client(*addFlags.cmdFlags)
+			if err != nil {
+				return err
+			}
+			conf := rssFlags.Parse(userConf, out)
+			return cmdRSS(context.Background(), conf, c)
 		})
 
 	configCreateFlags := cmdFlags
@@ -567,6 +659,24 @@ field by prefixing it with a ^ or !.
 				Password:       "",
 				RPC:            "/transmission/rpc",
 				CacheDirectory: defaultCacheDirectory(),
+				RSS: map[string]rssFeed{
+					"distrowatch": {
+						URL:      "https://distrowatch.com/news/torrents.xml",
+						Interval: flagDuration(time.Hour * 2),
+						Timeout:  flagDuration(time.Second * 30),
+						Tags:     []string{"iso"},
+					},
+				},
+				RSSFilters: []rssFilter{
+					{
+						Disabled:          true,
+						Match:             "^arch linux.*\\.iso",
+						Exclude:           "",
+						Labels:            []string{"rss", "linux"},
+						DownloadDirectory: "linux",
+						Tags:              []string{"iso"},
+					},
+				},
 			}
 
 			err = saveUserConfig(confPath, c)
