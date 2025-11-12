@@ -138,6 +138,10 @@ func (p *printer) print(zebra bool, t api.Torrent) {
 		pclr = p.color(clrDone, zebra)
 	}
 
+	if t.Status.And(api.StatusDownloading) && t.ETA >= 0 {
+		status = durationString(t.ETA)
+	}
+
 	status = pad(status, 11)
 	done := int(t.Done * 100)
 

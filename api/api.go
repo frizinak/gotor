@@ -146,6 +146,7 @@ type Torrent struct {
 	Magnet string
 	Labels []string
 
+	ETA   time.Duration
 	Have  bytes.Bytes
 	Total bytes.Bytes
 	Done  float64

@@ -254,7 +254,7 @@ var _fields = map[string][maxEndpoints]int{
 	"editDate":                {detail: x, list: 0},
 	"error":                   {detail: x, list: x},
 	"errorString":             {detail: x, list: x},
-	"eta":                     {detail: x, list: 0},
+	"eta":                     {detail: x, list: x},
 	"etaIdle":                 {detail: x, list: 0},
 	"file-count":              {detail: x, list: 0},
 	"files":                   {detail: x, list: 0},
@@ -331,6 +331,7 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 		Magnet: pv(t.MagnetLink),
 		Labels: t.Labels,
 
+		ETA:   time.Second * time.Duration(pv(t.ETA)),
 		Have:  bytes.New(float64(haveValid/1024), bytes.KiB),
 		Total: bytes.New(float64(sizeWhenDone/1024), bytes.KiB),
 		Done:  meta/100 + pv(t.PercentDone)*.99,

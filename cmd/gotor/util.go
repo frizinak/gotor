@@ -220,6 +220,35 @@ func parseUserTime(input string, eod bool) (time.Time, error) {
 	return dt, err
 }
 
+func durationString(dur time.Duration) string {
+	sec := dpart{dur / time.Second, "s"}
+	min := dpart{sec.value / 60, "m"}
+	hor := dpart{min.value / 60, "h"}
+	day := dpart{hor.value / 24, "d"}
+
+	sec.value -= min.value * 60
+	min.value -= hor.value * 60
+	hor.value -= day.value * 24
+
+	items := []dpart{day, hor, min, sec}
+	strs := make([]string, 2)
+	i := 0
+	for _, p := range items {
+		if str := p.String(); str != "" {
+			strs[i] = str
+			if i++; i == 2 {
+				break
+			}
+		}
+	}
+
+	if i == 0 {
+		return "0s"
+	}
+
+	return fmt.Sprintf("%s%s", strs[0], strs[1])
+}
+
 func commonAncestor(paths []string) string {
 	if len(paths) == 0 {
 		return ""

@@ -130,7 +130,7 @@ func (p *detailPrinter) since(dt time.Time) string {
 		return ""
 	}
 
-	dur := p.duration(s)
+	dur := durationString(s)
 	if dur == "0s" {
 		return "just now"
 	}
@@ -151,34 +151,6 @@ func (p *detailPrinter) date(dt time.Time) string {
 		return d
 	}
 	return fmt.Sprintf("%s (%s)", d, s)
-}
-func (p *detailPrinter) duration(dur time.Duration) string {
-	sec := dpart{dur / time.Second, "s"}
-	min := dpart{sec.value / 60, "m"}
-	hor := dpart{min.value / 60, "h"}
-	day := dpart{hor.value / 24, "d"}
-
-	sec.value -= min.value * 60
-	min.value -= hor.value * 60
-	hor.value -= day.value * 24
-
-	items := []dpart{day, hor, min, sec}
-	strs := make([]string, 2)
-	i := 0
-	for _, p := range items {
-		if str := p.String(); str != "" {
-			strs[i] = str
-			if i++; i == 2 {
-				break
-			}
-		}
-	}
-
-	if i == 0 {
-		return "0s"
-	}
-
-	return fmt.Sprintf("%s%s", strs[0], strs[1])
 }
 func (p *detailPrinter) title(level int, title string) {
 	fmt.Fprintf(p.o, "%s%s\n", p.indent(level-1), title)
@@ -360,7 +332,7 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 				return p.msg.unknown
 			}
 
-			return p.duration(time.Duration(n) * time.Second)
+			return durationString(time.Duration(n) * time.Second)
 		}
 		eta = f(pv(t.ETA))
 	}
@@ -406,10 +378,10 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 		case 0:
 			honorsIdleLimits = p.msg.yes
 			if i.SeedingLimit != nil {
-				idleLimit = p.duration(*i.SeedingLimit)
+				idleLimit = durationString(*i.SeedingLimit)
 			}
 		case 1:
-			idleLimit = p.duration(pv(t.SeedIdleLimit))
+			idleLimit = durationString(pv(t.SeedIdleLimit))
 		}
 	}
 	var honorsSeedRatio string = p.msg.no
@@ -477,8 +449,8 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 	p.prints(1, "done       ", p.date(pv(t.DoneDate)))
 	p.prints(1, "update     ", p.date(pv(t.EditDate)))
 	//prints(1, "created", date(pv(t.DateCreated)))
-	p.prints(1, "downloading", p.duration(pv(t.TimeDownloading)))
-	p.prints(1, "seeding    ", p.duration(pv(t.TimeSeeding)))
+	p.prints(1, "downloading", durationString(pv(t.TimeDownloading)))
+	p.prints(1, "seeding    ", durationString(pv(t.TimeSeeding)))
 	p.nl()
 
 	p.title(1, "Status")
