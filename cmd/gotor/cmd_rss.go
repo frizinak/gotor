@@ -88,7 +88,7 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 
 	s := time.Now()
 	if conf.verbose != 0 {
-		fmt.Fprintf(conf.output, "Fetching RSS feed '%s'\n", id)
+		fmt.Fprintf(conf.output, "[INF] Fetching RSS feed '%s'\n", id)
 	}
 
 	res, err := httpGet(ctx, def.URL, time.Duration(def.Timeout), func(r *http.Request) {
@@ -97,7 +97,7 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 	if conf.verbose != 0 {
 		fmt.Fprintf(
 			conf.output,
-			"Fetched RSS feed '%s' in %s\n",
+			"[INF] Fetched RSS feed '%s' in %s\n",
 			id,
 			time.Since(s).Round(time.Millisecond*10),
 		)
@@ -171,7 +171,7 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 		}
 	}
 
-	for _, f := range conf.rssFilters {
+	for i, f := range conf.rssFilters {
 		if f.Disabled {
 			continue
 		}
@@ -180,23 +180,33 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 			return err
 		}
 
-		if conf.verbose > 1 {
-			fmt.Fprintf(
-				conf.output,
-				"Active filter: match '%s' exclude '%s'\n",
-				f.Match,
-				f.Exclude,
-			)
-		}
-
+		count := 0
 		for _, tag := range f.Tags {
 			for _, id := range feedsByTags[tag] {
-				if _, ok := conf.rss[id]; !ok {
-					return fmt.Errorf("rss feed '%s' is not defined", id)
+				if conf.rss[id].Disabled {
+					continue
 				}
+				count++
 				tofetch[id] = struct{}{}
 				filters[id] = append(filters[id], f)
 			}
+		}
+
+		if conf.verbose > 0 && count == 0 {
+			fmt.Fprintf(
+				conf.output,
+				"[WRN] Filter %d ('%s') has no matching RSS feeds\n",
+				i+1,
+				f.Match,
+			)
+		} else if conf.verbose > 1 {
+			fmt.Fprintf(
+				conf.output,
+				"[INF] Active filter %d: match '%s' exclude '%s'\n",
+				i+1,
+				f.Match,
+				f.Exclude,
+			)
 		}
 	}
 
@@ -257,7 +267,7 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 				}
 				fmt.Fprintf(
 					conf.output,
-					"RSS feed '%s' produced %d new %s\n",
+					"[INF] RSS feed '%s' produced %d new %s\n",
 					r.id,
 					len(r.list),
 					v,
@@ -271,7 +281,7 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 				if conf.verbose > 2 {
 					fmt.Fprintf(
 						conf.output,
-						"New RSS entry: '%s'\n",
+						"[DBG] New RSS entry: '%s'\n",
 						item.Title,
 					)
 				}
@@ -279,7 +289,7 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 					if f.Test(item.Title, item.Size) {
 						fmt.Fprintf(
 							conf.output,
-							"Found '%s' which matches filter '%s' on rss feed '%s'\n",
+							"[INF] Found '%s' which matches filter '%s' on rss feed '%s'\n",
 							item.Title,
 							f.Match,
 							r.id,
@@ -292,7 +302,7 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 		}
 
 		if conf.verbose != 0 && len(matches) != 0 {
-			fmt.Fprintln(conf.output, "Adding matches to torrent client")
+			fmt.Fprintln(conf.output, "[INF] Adding matches to torrent client")
 		}
 
 		for _, match := range matches {
@@ -314,11 +324,12 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 		}
 
 		if len(errs) != 0 {
-			e := strings.Join(errs, "\n")
 			if conf.sleep == 0 {
-				return errors.New(e)
+				return errors.New(strings.Join(errs, "\n"))
 			}
-			fmt.Fprintln(conf.output, e)
+			for _, e := range errs {
+				fmt.Fprintln(conf.output, "[ERR]", e)
+			}
 		}
 
 		if conf.sleep == 0 {

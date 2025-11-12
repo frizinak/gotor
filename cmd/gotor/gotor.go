@@ -61,10 +61,11 @@ type rssFeed struct {
 	Interval flagDuration `yaml:"interval"`
 	Timeout  flagDuration `yaml:"timeout"`
 	Tags     []string     `yaml:"tags"`
+	Disabled bool         `yaml:"disabled,omitempty"`
 }
 
 type rssFilter struct {
-	Disabled          bool     `yaml:"disabled"`
+	Disabled          bool     `yaml:"disabled,omitempty"`
 	Tags              []string `yaml:"tags"`
 	Match             string   `yaml:"match"`
 	Exclude           string   `yaml:"exclude"`
@@ -675,6 +676,8 @@ field by prefixing it with a ^ or !.
 						Labels:            []string{"rss", "linux"},
 						DownloadDirectory: "linux",
 						Tags:              []string{"iso"},
+						MinSize:           "5M",
+						MaxSize:           "5G",
 					},
 				},
 			}
