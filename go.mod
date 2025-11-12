@@ -7,6 +7,7 @@ require (
 	github.com/frizinak/transmissionrpc v0.1.0
 	github.com/jackpal/bencode-go v1.0.2
 	github.com/mattn/go-runewidth v0.0.19
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

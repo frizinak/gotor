@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/containerd/console"
+	"gopkg.in/yaml.v3"
 )
 
 type flagStrs []string
@@ -37,6 +40,34 @@ func (i *flagRegexes) Set(value string) error {
 
 	*i = append(*i, r)
 	return nil
+}
+
+type flagDuration time.Duration
+
+func (i flagDuration) String() string { return time.Duration(i).String() }
+func (i *flagDuration) Set(value string) error {
+	if value == "" {
+		*i = flagDuration(0)
+		return nil
+	}
+	last := value[len(value)-1]
+	if last >= '0' && last <= '9' {
+		value += "s"
+	}
+	dur, err := time.ParseDuration(value)
+	if err != nil {
+		return err
+	}
+	*i = flagDuration(dur)
+	return nil
+}
+
+func (i *flagDuration) UnmarshalYAML(value *yaml.Node) error {
+	return i.Set(value.Value)
+}
+
+func (i flagDuration) MarshalYAML() (interface{}, error) {
+	return time.Duration(i).String(), nil
 }
 
 type prompter struct {
@@ -276,6 +307,24 @@ func commonAncestor(paths []string) string {
 
 	return common
 }
+
+func tmpFile(file, ext string) string {
+	stamp := strconv.FormatInt(time.Now().UnixNano(), 36)
+	rnd := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, rnd)
+	if err != nil {
+		panic(err)
+	}
+
+	return fmt.Sprintf(
+		"%s.%s-%s%s",
+		file,
+		stamp,
+		base64.RawURLEncoding.EncodeToString(rnd),
+		ext,
+	)
+}
+
 type wrappedCloser struct {
 	io.ReadCloser
 	internal io.Closer

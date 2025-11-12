@@ -204,6 +204,10 @@ type sortFlags struct {
 	sort    string
 }
 
+type watchFlags struct {
+	watch flagDuration
+}
+
 func (f sortFlags) Parse() (sortConfig, error) {
 	var c sortConfig
 
@@ -500,8 +504,8 @@ type listFlags struct {
 	*cmdFlags
 	*filterFlags
 	*sortFlags
+	*watchFlags
 	downloadDirFlags
-	watch      float64
 	hideErrors bool
 }
 
@@ -519,7 +523,7 @@ func (f listFlags) Parse(uc userConfig, o io.Writer) (listConfig, error) {
 		return conf, err
 	}
 
-	conf.sleep = (time.Second * time.Duration((f.watch)*1e6)) / 1e6
+	conf.sleep = time.Duration(f.watch)
 
 	conf.print = newPrinter(80, !f.noColor, !f.hideErrors)
 	return conf, nil

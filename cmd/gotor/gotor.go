@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,25 +9,38 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/frizinak/gotor/api"
 	_ "github.com/frizinak/gotor/api/transmission"
 	"github.com/frizinak/gotor/flags"
+	"gopkg.in/yaml.v3"
 )
 
 type cmdFlags struct {
 	config  string
 	noColor bool
+	v       bool
+	vv      bool
+	vvv     bool
 }
 
 func (f cmdFlags) Parse(uc userConfig, o io.Writer) cmdConfig {
-	return cmdConfig{color: !f.noColor, output: o}
+	var v uint8
+	switch {
+	case f.vvv:
+		v = 3
+	case f.vv:
+		v = 2
+	case f.v:
+		v = 1
+	}
+	return cmdConfig{color: !f.noColor, output: o, verbose: v}
 }
 
 type cmdConfig struct {
-	color  bool
-	output io.Writer
+	color   bool
+	output  io.Writer
+	verbose uint8
 }
 
 type downloadDirFlags struct{}
@@ -42,13 +54,14 @@ type downloadDirConfig struct {
 }
 
 type userConfig struct {
-	TLS               bool        `json:"tls"`
-	Host              string      `json:"host"`
-	Port              interface{} `json:"port"`
-	User              string      `json:"username"`
-	Password          string      `json:"password"`
-	RPC               string      `json:"rpc-path"`
-	DownloadDirectory string      `json:"download-dir"`
+	TLS               bool               `yaml:"tls"`
+	Host              string             `yaml:"host"`
+	Port              interface{}        `yaml:"port"`
+	User              string             `yaml:"username"`
+	Password          string             `yaml:"password"`
+	RPC               string             `yaml:"rpc-path"`
+	DownloadDirectory string             `yaml:"download-dir"`
+	CacheDirectory    string             `yaml:"cache-directory"`
 }
 
 func (c userConfig) URL() string {
@@ -77,22 +90,27 @@ func loadUserConfig(path string) (userConfig, error) {
 	if err != nil {
 		return c, err
 	}
-	dec := json.NewDecoder(f)
+	dec := yaml.NewDecoder(f)
 	err = dec.Decode(&c)
 	f.Close()
+
+	if c.CacheDirectory == "" {
+		c.CacheDirectory = defaultCacheDirectory()
+	}
+
 	return c, err
 }
 
 func saveUserConfig(path string, c userConfig) error {
 	c.Port = fmt.Sprintf("%v", c.Port)
 
-	tmp := path + "." + time.Now().Format("150405.999999999") + ".tmp"
+	tmp := tmpFile(path, ".tmp")
 	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	enc := json.NewEncoder(f)
-	enc.SetIndent("", "    ")
+	enc := yaml.NewEncoder(f)
+	enc.SetIndent(2)
 	err = enc.Encode(c)
 	f.Close()
 	if err != nil {
@@ -103,34 +121,19 @@ func saveUserConfig(path string, c userConfig) error {
 	return os.Rename(tmp, path)
 }
 
-func main() {
-	me := os.Args[0]
-	out := os.Stdout
+var defaultConfigDirectory func() string
+var defaultCacheDirectory func() string
 
-	var defaultConfPath string
-	client := func(flags cmdFlags) (api.Client, userConfig, error) {
-		confPath := defaultConfPath
-		if flags.config != "" {
-			confPath = flags.config
-		}
-		conf, err := loadUserConfig(confPath)
-		if os.IsNotExist(err) {
-			return nil, conf, fmt.Errorf(
-				`No config file found at '%s'.
-You can use the '%s config create' to create one`,
-				confPath,
-				me,
-			)
-		}
-		if err != nil {
-			return nil, conf, err
-		}
+func defaultConfigPath() string {
+	return filepath.Join(defaultConfigDirectory(), "config.yml")
+}
 
-		c, err := api.GetClient("transmission", conf.URL())
-		return c, conf, err
-	}
-
-	flagsDefault := func(f *flag.FlagSet, flags *cmdFlags) {
+func init() {
+	var _config string
+	defaultConfigDirectory = func() string {
+		if _config != "" {
+			return _config
+		}
 		dir, err := os.UserConfigDir()
 		if err != nil {
 			var udir string
@@ -141,18 +144,74 @@ You can use the '%s config create' to create one`,
 		if err != nil {
 			dir = "./"
 		}
-		defaultConfPath = filepath.Join(dir, "gotor", "config.json")
 
+		_config = filepath.Join(dir, "gotor")
+		return _config
+	}
+
+	var _cache string
+	defaultCacheDirectory = func() string {
+		if _cache != "" {
+			return _cache
+		}
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			var udir string
+			if udir, err = os.UserHomeDir(); err == nil {
+				dir = filepath.Join(udir, ".cache")
+			}
+		}
+		if err != nil {
+			dir = "./"
+		}
+
+		_cache = filepath.Join(dir, "gotor")
+		return _cache
+	}
+}
+
+func main() {
+	me := os.Args[0]
+	out := os.Stdout
+
+	clientConf := func(flags cmdFlags) (userConfig, error) {
+		confPath := defaultConfigPath()
+		if flags.config != "" {
+			confPath = flags.config
+		}
+		conf, err := loadUserConfig(confPath)
+		if os.IsNotExist(err) {
+			return conf, fmt.Errorf(
+				`No config file found at '%s'.
+You can use the '%s config create' to create one`,
+				confPath,
+				me,
+			)
+		}
+		return conf, err
+	}
+
+	client := func(flags cmdFlags) (api.Client, userConfig, error) {
+		conf, err := clientConf(flags)
+		if err != nil {
+			return nil, conf, err
+		}
+
+		c, err := api.GetClient("transmission", conf.URL())
+		return c, conf, err
+	}
+
+	flagsDefault := func(f *flag.FlagSet, flags *cmdFlags) {
 		f.StringVar(
 			&flags.config,
 			"c",
-			defaultConfPath,
+			defaultConfigPath(),
 			"path to the config file",
 		)
 	}
 
 	flagsColor := func(f *flag.FlagSet, flags *cmdFlags) {
-		f.BoolVar(&flags.noColor, "C", false, "Disable colors")
+		f.BoolVar(&flags.noColor, "C", false, "Disable colors.")
 	}
 
 	flagsFilters := func(f *flag.FlagSet, flags *filterFlags) {
@@ -200,15 +259,15 @@ Specify this flag multiple times to filter multiple statuses.`,
 			"i",
 			"",
 			`Filter id.
-Separate multiple values with a comma and specify ranges with a dash`,
+Separate multiple values with a comma and specify ranges with a dash.`,
 		)
 
-		f.Var(&flags.path, "p", "Filter paths with perl regexes")
-		f.Var(&flags.label, "l", "Filter labels with perl regexes")
-		f.Var(&flags.name, "n", "Filter names with perl regexes")
-		f.Var(&flags.pathNot, "P", "Inverse filter paths with perl regexes")
-		f.Var(&flags.labelNot, "L", "Inverse filter labels with perl regexes")
-		f.Var(&flags.nameNot, "N", "Inverse filter names with perl regexes")
+		f.Var(&flags.path, "p", "Filter paths with perl regexes.")
+		f.Var(&flags.label, "l", "Filter labels with perl regexes.")
+		f.Var(&flags.name, "n", "Filter names with perl regexes.")
+		f.Var(&flags.pathNot, "P", "Inverse-filter paths with perl regexes.")
+		f.Var(&flags.labelNot, "L", "Inverse-filter labels with perl regexes.")
+		f.Var(&flags.nameNot, "N", "Inverse-filter names with perl regexes.")
 	}
 
 	flagsSort := func(f *flag.FlagSet, flags *sortFlags) {
@@ -216,7 +275,7 @@ Separate multiple values with a comma and specify ranges with a dash`,
 			&flags.noGroup,
 			"G",
 			false,
-			"Disable grouping",
+			"Disable grouping.",
 		)
 
 		f.StringVar(
@@ -241,35 +300,39 @@ field by prefixing it with a ^ or !.
 		)
 	}
 
+	flagsWatch := func(f *flag.FlagSet, flags *watchFlags) {
+		f.Var(
+			&flags.watch,
+			"w",
+			"Continuously query at the given interval",
+		)
+	}
+
 	cmdFlags := &cmdFlags{}
 	filterFlags := &filterFlags{}
 	sortFlags := &sortFlags{}
+	watchFlags := &watchFlags{}
 
 	listFlags := listFlags{
 		cmdFlags:    cmdFlags,
 		filterFlags: filterFlags,
 		sortFlags:   sortFlags,
+		watchFlags:  watchFlags,
 	}
 
 	fr := flags.NewRoot(out).
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, cmdFlags)
-			flagsColor(f, cmdFlags)
-			flagsFilters(f, filterFlags)
-			flagsSort(f, sortFlags)
+			flagsDefault(f, listFlags.cmdFlags)
+			flagsColor(f, listFlags.cmdFlags)
+			flagsFilters(f, listFlags.filterFlags)
+			flagsSort(f, listFlags.sortFlags)
+			flagsWatch(f, listFlags.watchFlags)
 
 			f.BoolVar(
 				&listFlags.hideErrors,
 				"E",
 				false,
-				"Hide torrent error messages",
-			)
-
-			f.Float64Var(
-				&listFlags.watch,
-				"w",
-				0,
-				"Continuously query at the given interval in seconds",
+				"Hide torrent error messages.",
 			)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
@@ -365,8 +428,8 @@ field by prefixing it with a ^ or !.
 	removeFlags := removeFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
 	fr.Add("remove", "delete").Description("remove torrents").
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, cmdFlags)
-			flagsFilters(f, filterFlags)
+			flagsDefault(f, removeFlags.cmdFlags)
+			flagsFilters(f, removeFlags.filterFlags)
 
 			f.BoolVar(
 				&removeFlags.deleteData,
@@ -405,10 +468,10 @@ field by prefixing it with a ^ or !.
 			)
 		})
 
-	var statsFlags statsFlags
+	statsFlags := statsFlags{cmdFlags: cmdFlags}
 	fr.Add("stats").Description("monitor stats").
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, &statsFlags.cmdFlags)
+			flagsDefault(f, statsFlags.cmdFlags)
 
 			f.Float64Var(
 				&statsFlags.watch,
@@ -422,7 +485,7 @@ field by prefixing it with a ^ or !.
 				set.Usage(1)
 			}
 
-			c, userConf, err := client(statsFlags.cmdFlags)
+			c, userConf, err := client(*statsFlags.cmdFlags)
 			if err != nil {
 				return err
 			}
@@ -430,21 +493,21 @@ field by prefixing it with a ^ or !.
 			return cmdStats(context.Background(), conf, c)
 		})
 
-	var addFlags addFlags
+	addFlags := addFlags{cmdFlags: cmdFlags}
 	fr.Add("add").Description("add torrents").
 		Help(func(w io.Writer) {
 			fmt.Fprintln(w, "- argument 1:   the relative destination / label.")
 			fmt.Fprintln(w, "- argument 2-n: torrent files or magnet URIs.")
 		}).
 		Define(func(f *flag.FlagSet) {
-			flagsDefault(f, &addFlags.cmdFlags)
+			flagsDefault(f, addFlags.cmdFlags)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
 			if len(args) < 2 {
 				set.Usage(1)
 			}
 
-			c, userConf, err := client(addFlags.cmdFlags)
+			c, userConf, err := client(*addFlags.cmdFlags)
 			if err != nil {
 				return err
 			}
@@ -483,7 +546,7 @@ field by prefixing it with a ^ or !.
 				set.Usage(1)
 			}
 
-			confPath := defaultConfPath
+			confPath := defaultConfigPath()
 			if configCreateFlags.config != "" {
 				confPath = configCreateFlags.config
 			}
@@ -495,14 +558,15 @@ field by prefixing it with a ^ or !.
 				return err
 			}
 			dir := filepath.Dir(confPath)
-			os.MkdirAll(dir, 0750)
+			_ = os.MkdirAll(dir, 0750)
 
 			c := userConfig{
-				Host:     "localhost",
-				Port:     "9091",
-				User:     "",
-				Password: "",
-				RPC:      "/transmission/rpc",
+				Host:           "localhost",
+				Port:           "9091",
+				User:           "",
+				Password:       "",
+				RPC:            "/transmission/rpc",
+				CacheDirectory: defaultCacheDirectory(),
 			}
 
 			err = saveUserConfig(confPath, c)

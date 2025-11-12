@@ -16,7 +16,7 @@ import (
 )
 
 type addFlags struct {
-	cmdFlags
+	*cmdFlags
 	downloadDirFlags
 }
 

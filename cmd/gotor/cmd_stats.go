@@ -12,7 +12,7 @@ import (
 )
 
 type statsFlags struct {
-	cmdFlags
+	*cmdFlags
 	watch float64
 }
 
