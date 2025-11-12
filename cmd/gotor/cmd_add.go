@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/frizinak/gotor/api"
 	"github.com/jackpal/bencode-go"
@@ -36,7 +37,7 @@ type addConfig struct {
 
 var b64buf = bytes.NewBuffer(nil)
 
-func parseAdd(str string) (string, error) {
+func parseAdd(ctx context.Context, str string) (string, error) {
 	if strings.HasPrefix(str, "magnet:") {
 		return str, nil
 	}
@@ -44,15 +45,25 @@ func parseAdd(str string) (string, error) {
 	b64buf.Reset()
 	b64 := base64.NewEncoder(base64.StdEncoding, b64buf)
 
-	f, err := os.Open(str)
-	if err != nil {
-		return "", err
+	var reader io.ReadCloser
+	if strings.HasPrefix(str, "http:") || strings.HasPrefix(str, "https:") {
+		res, err := httpGet(ctx, str, time.Second*60, nil)
+		if err != nil {
+			return "", err
+		}
+		reader = res.Body
+	} else {
+		f, err := os.Open(str)
+		if err != nil {
+			return "", err
+		}
+		reader = f
 	}
 
-	r := io.TeeReader(f, b64)
+	r := io.TeeReader(reader, b64)
 	var l interface{}
-	err = bencode.Unmarshal(r, &l)
-	f.Close()
+	err := bencode.Unmarshal(r, &l)
+	reader.Close()
 	b64.Close()
 	if err != nil {
 		return "", err
@@ -97,7 +108,7 @@ func addDir(ctx context.Context, conf addConfig, c api.Client) (string, error) {
 }
 
 func add(ctx context.Context, conf addConfig, c api.Client, dir, item string) (api.Torrent, error) {
-	clean, err := parseAdd(item)
+	clean, err := parseAdd(ctx, item)
 	if err != nil {
 		const m = 40
 		if len(item) > m+3 {

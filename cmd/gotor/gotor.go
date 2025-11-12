@@ -455,6 +455,9 @@ field by prefixing it with a ^ or !.
 			if strings.HasPrefix(cat, "magnet:") {
 				return fmt.Errorf("first argument looks like a magnet URI")
 			}
+			if strings.HasPrefix(cat, "http:") || strings.HasPrefix(cat, "https:") {
+				return fmt.Errorf("first argument looks like a torrent url")
+			}
 			if strings.HasSuffix(cat, ".torrent") {
 				if stat, _ := os.Stat(cat); stat != nil && !stat.IsDir() {
 					return fmt.Errorf("first argument looks like a torrent file")

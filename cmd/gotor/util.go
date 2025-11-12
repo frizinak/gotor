@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"regexp"
@@ -272,4 +275,50 @@ func commonAncestor(paths []string) string {
 	}
 
 	return common
+}
+type wrappedCloser struct {
+	io.ReadCloser
+	internal io.Closer
+}
+
+func (c *wrappedCloser) Close() error {
+	c.ReadCloser.Close()
+	if c.internal != nil {
+		return c.internal.Close()
+	}
+	return nil
+}
+
+func httpGet(ctx context.Context, url string, timeout time.Duration, mod func(*http.Request)) (res *http.Response, err error) {
+	c := &http.Client{Timeout: timeout}
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return res, err
+	}
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36")
+	if mod != nil {
+		mod(req)
+	}
+	res, err = c.Do(req)
+	if err != nil {
+		return
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		res.Body.Close()
+		res.Body = nil
+		return nil, fmt.Errorf("invalid http response status: %d", res.StatusCode)
+	}
+
+	body := res.Body
+	res.Body = &wrappedCloser{ReadCloser: body}
+	if res.Header.Get("Content-Encoding") == "gzip" {
+		var gz io.ReadCloser
+		gz, err = gzip.NewReader(body)
+		if err == nil {
+			res.Body = &wrappedCloser{ReadCloser: gz, internal: body}
+		}
+	}
+
+	return
 }
