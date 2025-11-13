@@ -12,7 +12,6 @@ import (
 type removeFlags struct {
 	*cmdFlags
 	*filterFlags
-	downloadDirFlags
 	deleteData bool
 	yes        bool
 }
@@ -21,8 +20,7 @@ func (f removeFlags) Parse(uc userConfig, o io.Writer) (removeConfig, error) {
 	var conf removeConfig
 	var err error
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
-	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
-	conf.filters, err = f.filterFlags.Parse()
+	conf.filters, err = f.filterFlags.Parse(uc, o)
 	conf.print = newPrinter(80, !f.noColor, false)
 	conf.deleteData = f.deleteData
 	conf.yes = f.yes
@@ -31,8 +29,7 @@ func (f removeFlags) Parse(uc userConfig, o io.Writer) (removeConfig, error) {
 
 type removeConfig struct {
 	cmdConfig
-	filters filterConfig
-	downloadDirConfig
+	filters    filterConfig
 	prompter   prompter
 	print      *printer
 	deleteData bool
@@ -40,7 +37,6 @@ type removeConfig struct {
 }
 
 func cmdRemove(ctx context.Context, conf removeConfig, c api.Client) error {
-
 	ids := make([]string, 0, 10)
 	err := c.List(ctx, func(t api.Torrent) error {
 		yes, ok := cmdRemoveTorrentCheck(conf, t)
@@ -76,7 +72,7 @@ func cmdRemove(ctx context.Context, conf removeConfig, c api.Client) error {
 
 func cmdRemoveTorrentCheck(conf removeConfig, t api.Torrent) (yes, ok bool) {
 	ok = true
-	if !conf.filters.Match(t, conf.downloadDirectory) {
+	if !conf.filters.Match(t) {
 		return
 	}
 

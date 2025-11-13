@@ -436,10 +436,14 @@ type filterFlags struct {
 
 	added   [2]string
 	updated [2]string
+
+	downloadDirFlags
 }
 
-func (f filterFlags) Parse() (filterConfig, error) {
+func (f filterFlags) Parse(uc userConfig, o io.Writer) (filterConfig, error) {
 	var conf filterConfig
+	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
+
 	if f, ok := intRange(f.id); ok {
 		conf.id = make(map[string]struct{}, len(f))
 		for _, v := range f {
@@ -505,7 +509,6 @@ type listFlags struct {
 	*filterFlags
 	*sortFlags
 	*watchFlags
-	downloadDirFlags
 	hideErrors bool
 }
 
@@ -513,8 +516,7 @@ func (f listFlags) Parse(uc userConfig, o io.Writer) (listConfig, error) {
 	var conf listConfig
 	var err error
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
-	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
-	conf.filters, err = f.filterFlags.Parse()
+	conf.filters, err = f.filterFlags.Parse(uc, o)
 	if err != nil {
 		return conf, err
 	}
@@ -560,10 +562,12 @@ type filterConfig struct {
 
 	added   [2]*time.Time
 	updated [2]*time.Time
+
+	downloadDirConfig
 }
 
-func (f filterConfig) Match(t api.Torrent, base string) bool {
-	path := relativeTorrentPath(base, t.Path)
+func (f filterConfig) Match(t api.Torrent) bool {
+	path := relativeTorrentPath(f.downloadDirectory, t.Path)
 	if f.id != nil {
 		if _, ok := f.id[t.ID]; !ok {
 			return false
@@ -573,7 +577,7 @@ func (f filterConfig) Match(t api.Torrent, base string) bool {
 	{
 		m := len(f.pathNot) == 0
 		for _, r := range f.pathNot {
-			if !(t.Path == base && r.MatchString(pathRoot)) &&
+			if !(t.Path == f.downloadDirectory && r.MatchString(pathRoot)) &&
 				!r.MatchString(path) &&
 				!r.MatchString(t.Path) {
 				m = true
@@ -618,7 +622,7 @@ func (f filterConfig) Match(t api.Torrent, base string) bool {
 	}
 
 	for _, r := range f.path {
-		if !(t.Path == base && r.MatchString(pathRoot)) &&
+		if !(t.Path == f.downloadDirectory && r.MatchString(pathRoot)) &&
 			!r.MatchString(path) &&
 			!r.MatchString(t.Path) {
 			return false
@@ -683,7 +687,6 @@ func (f filterConfig) Match(t api.Torrent, base string) bool {
 
 type listConfig struct {
 	cmdConfig
-	downloadDirConfig
 	print   *printer
 	filters filterConfig
 	sort    sortConfig
@@ -789,7 +792,7 @@ main:
 		lastPath := ""
 
 		for _, t := range items {
-			if !conf.filters.Match(t, conf.downloadDirectory) {
+			if !conf.filters.Match(t) {
 				continue
 			}
 
@@ -806,7 +809,7 @@ main:
 				zebra = false
 				lastPath = t.Path
 
-				relpath := relativeTorrentPath(conf.downloadDirectory, t.Path)
+				relpath := relativeTorrentPath(conf.filters.downloadDirectory, t.Path)
 				fmt.Fprintf(
 					conf.print.writer,
 					"%s%6s %s %s",
