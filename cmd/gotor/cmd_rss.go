@@ -48,26 +48,43 @@ func rssFilename(dir, name, ext string) string {
 	return filepath.Join(dir, fmt.Sprintf("%s%s", name, ext))
 }
 
-func rssLast(dir, name string) (time.Time, error) {
-	r, err := os.ReadFile(rssFilename(dir, name, ".stamp"))
+func rssLast(dir, name string) (errCount int, update time.Time, err error) {
+	var r []byte
+	r, err = os.ReadFile(rssFilename(dir, name, ".state"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = nil
 		}
-		return time.Time{}, err
-	}
-	v, err := strconv.ParseInt(string(r), 10, 64)
-	if err != nil {
-		return time.Time{}, err
+		return
 	}
 
-	return time.Unix(v, 0), nil
+	f := strings.Fields(string(r))
+	var unix int64
+	unix, err = strconv.ParseInt(f[0], 10, 64)
+	if err != nil {
+		return
+	}
+
+	if len(f) > 1 && f[1] != "" {
+		errCount, err = strconv.Atoi(f[1])
+	}
+
+	update = time.Unix(unix, 0)
+	return
 }
 
-func rssLastUpdate(dir, name string) error {
-	fp := filepath.Join(rssFilename(dir, name, ".stamp"))
+func rssLastUpdate(dir, name string, errCount int, last time.Time) error {
+	fp := filepath.Join(rssFilename(dir, name, ".state"))
 	tmp := tmpFile(fp, ".tmp")
-	d := []byte(strconv.FormatInt(time.Now().Unix(), 10))
+	dt := time.Now()
+	if errCount > 0 {
+		dt = last
+	}
+
+	d := make([]byte, 0, 10+1+1)
+	d = strconv.AppendInt(d, dt.Unix(), 10)
+	d = append(d, ' ')
+	d = strconv.AppendInt(d, int64(errCount), 10)
 	if err := os.WriteFile(tmp, d, 0644); err != nil {
 		os.Remove(tmp)
 		return err
@@ -77,12 +94,17 @@ func rssLastUpdate(dir, name string) error {
 
 func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) {
 	def := conf.rss[id]
-	last, err := rssLast(conf.cacheDir, id)
+	errCount, last, err := rssLast(conf.cacheDir, id)
 	if err != nil {
 		return nil, err
 	}
 
-	if time.Since(last) < time.Duration(def.Interval) {
+	add := time.Duration(errCount*errCount) * time.Minute * 5
+	const max = time.Hour * 10
+	if add > max {
+		add = max
+	}
+	if time.Since(last) < time.Duration(def.Interval)+add {
 		return nil, nil
 	}
 
@@ -132,13 +154,14 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 		}
 
 		if err != nil {
+			rssLastUpdate(conf.cacheDir, id, errCount+1, last)
 			os.Remove(tmp)
 			return err
 		}
 
 		err = os.Rename(tmp, cacheFile)
 		if err == nil {
-			err = rssLastUpdate(conf.cacheDir, id)
+			err = rssLastUpdate(conf.cacheDir, id, 0, last)
 		}
 		return err
 	}
