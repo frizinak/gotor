@@ -228,6 +228,30 @@ func (c *Client) List(ctx context.Context, cb api.TorrentCallback) error {
 	return nil
 }
 
+func (c *Client) simple(ctx context.Context, ids []string, method func(context.Context, []int64) error) error {
+	idns, err := idint64(ids)
+	if err != nil {
+		return err
+	}
+	return method(ctx, idns)
+}
+
+func (c *Client) Announce(ctx context.Context, ids []string) error {
+	return c.simple(ctx, ids, c.rpc.TorrentReannounceIDs)
+}
+
+func (c *Client) Verify(ctx context.Context, ids []string) error {
+	return c.simple(ctx, ids, c.rpc.TorrentVerifyIDs)
+}
+
+func (c *Client) Start(ctx context.Context, ids []string) error {
+	return c.simple(ctx, ids, c.rpc.TorrentStartIDs)
+}
+
+func (c *Client) Stop(ctx context.Context, ids []string) error {
+	return c.simple(ctx, ids, c.rpc.TorrentStopIDs)
+}
+
 const x = 1
 
 const (

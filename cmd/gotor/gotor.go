@@ -541,6 +541,49 @@ field by prefixing it with a ^ or !.
 			)
 		})
 
+	torrentFlags := torrentFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
+	type torrentOp func(context.Context, []string) error
+	torrentHandler := func(set *flags.Set, args []string, op func(api.Client) torrentOp) error {
+		if len(args) != 0 {
+			set.Usage(1)
+		}
+
+		c, userConf, err := client(*torrentFlags.cmdFlags)
+		if err != nil {
+			return err
+		}
+
+		conf, err := torrentFlags.Parse(userConf, out)
+		if err != nil {
+			return err
+		}
+
+		return cmdTorrent(
+			context.Background(),
+			conf,
+			c,
+			op(c),
+		)
+	}
+
+	ops := map[string]func(api.Client) torrentOp{
+		"verify":   func(c api.Client) torrentOp { return c.Verify },
+		"announce": func(c api.Client) torrentOp { return c.Announce },
+		"start":    func(c api.Client) torrentOp { return c.Start },
+		"stop":     func(c api.Client) torrentOp { return c.Stop },
+	}
+
+	for cmd, op := range ops {
+		fr.Add(cmd).Description(fmt.Sprintf("%s torrents", cmd)).
+			Define(func(f *flag.FlagSet) {
+				flagsDefault(f, torrentFlags.cmdFlags)
+				flagsFilters(f, torrentFlags.filterFlags)
+			}).
+			Handler(func(set *flags.Set, args []string) error {
+				return torrentHandler(set, args, op)
+			})
+	}
+
 	statsFlags := statsFlags{cmdFlags: cmdFlags}
 	fr.Add("stats").Description("monitor stats").
 		Define(func(f *flag.FlagSet) {

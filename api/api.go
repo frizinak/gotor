@@ -36,6 +36,10 @@ type Client interface {
 	Details(ctx context.Context, ids []string, cb RawTorrentCallback) error
 	Stats(ctx context.Context) (Stats, error)
 	Info(ctx context.Context) (Info, error)
+	Announce(ctx context.Context, ids []string) error
+	Verify(ctx context.Context, ids []string) error
+	Start(ctx context.Context, ids []string) error
+	Stop(ctx context.Context, ids []string) error
 }
 
 type ErrNoSuchTorrent struct {
