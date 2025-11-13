@@ -377,7 +377,7 @@ field by prefixing it with a ^ or !.
 		f.Var(
 			&flags.watch,
 			"w",
-			"Continuously query at the given interval",
+			"Continuously query at the given interval.",
 		)
 	}
 
@@ -615,6 +615,20 @@ field by prefixing it with a ^ or !.
 
 	rssFlags := rssFlags{addFlags: &addFlags, watchFlags: watchFlags}
 	fr.Add("rss").Description("fetch RSS feeds and add torrents based on filters").
+		Help(func(w io.Writer) {
+			fmt.Fprintln(w, `
+Config example:
+  rss-filters:
+    - { match: "(?-i)^Debian.*\\.iso", tags: [linux], labels: [brr, linux], directory: linux, min-size: 5M }
+
+  rss-feeds:
+    distrowatch:
+      url: https://distrowatch.com/news/torrents.xml
+      interval: 1h
+      timeout: 30s
+      tags: [linux]
+`)
+		}).
 		Define(func(f *flag.FlagSet) {
 			flagsDefault(f, rssFlags.cmdFlags)
 			flagsVerbose(f, rssFlags.cmdFlags)
