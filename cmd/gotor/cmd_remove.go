@@ -24,6 +24,7 @@ func (f removeFlags) Parse(uc userConfig, o io.Writer) (removeConfig, error) {
 	conf.print = newPrinter(80, !f.noColor, false)
 	conf.deleteData = f.deleteData
 	conf.yes = f.yes
+	conf.prompter.output = o
 	return conf, err
 }
 

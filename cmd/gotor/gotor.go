@@ -532,7 +532,6 @@ field by prefixing it with a ^ or !.
 			if err != nil {
 				return err
 			}
-			conf.prompter = prompter{output: out}
 
 			return cmdRemove(
 				context.Background(),
