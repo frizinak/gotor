@@ -1,7 +1,6 @@
 package main
 
 import (
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -153,17 +152,8 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 	}
 
 	defer res.Body.Close()
-	var body io.ReadCloser = res.Body
-	if res.Header.Get("Content-Encoding") == "gzip" {
-		body, err = gzip.NewReader(body)
-		if err != nil {
-			return nil, err
-		}
-		defer body.Close()
-	}
 
 	cacheFile := rssFilename(conf.cacheDir, id, ".xml")
-
 	tmp := tmpFile(cacheFile, ".tmp")
 	opf, err := os.Create(tmp)
 	if err != nil {
@@ -202,7 +192,7 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 		return nil, cleanup(err)
 	}
 
-	items, err := rss.ParseDiff(ipf, body, opf)
+	items, err := rss.ParseDiff(ipf, res.Body, opf)
 	return items, cleanup(err)
 }
 
