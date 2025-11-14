@@ -31,7 +31,7 @@ func (i *Item) Time() time.Time {
 	return t
 }
 
-func ParseDiff(original, update io.Reader, cache io.Writer) ([]*Item, error) {
+func ParseDiff(original, update io.Reader, cache io.Writer, cacheAmount int) ([]*Item, error) {
 	i, di := &rss{}, xml.NewDecoder(original)
 	u, du := &rss{}, xml.NewDecoder(update)
 	do := xml.NewEncoder(cache)
@@ -46,21 +46,42 @@ func ParseDiff(original, update io.Reader, cache io.Writer) ([]*Item, error) {
 	}
 
 	uniq := make(map[string]*Item, len(u.Items))
+	uniq2 := make(map[string]*Item, len(i.Items))
 	for _, item := range u.Items {
 		uniq[item.Title] = item
+		uniq2[item.Title] = item
 	}
 	for _, item := range i.Items {
 		delete(uniq, item.Title)
 	}
 
+	if cacheAmount > 0 {
+		for _, item := range i.Items {
+			uniq2[item.Title] = item
+		}
+	}
+
 	items := make([]*Item, 0, len(uniq))
+	items2 := make([]*Item, 0, len(uniq2))
 	for _, item := range uniq {
 		items = append(items, item)
 	}
+	for _, item := range uniq2 {
+		items2 = append(items2, item)
+	}
 
 	s := func(a, b *Item) int { return b.Time().Compare(a.Time()) }
-	slices.SortFunc(u.Items, s)
 	slices.SortFunc(items, s)
+	slices.SortFunc(items2, s)
+
+	if cacheAmount < len(u.Items) {
+		cacheAmount = len(u.Items)
+	}
+	if len(items2) > cacheAmount {
+		items2 = items2[:cacheAmount]
+	}
+
+	u.Items = items2
 
 	return items, do.Encode(u)
 }

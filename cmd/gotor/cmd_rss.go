@@ -192,7 +192,7 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 		return nil, cleanup(err)
 	}
 
-	items, err := rss.ParseDiff(ipf, res.Body, opf)
+	items, err := rss.ParseDiff(ipf, res.Body, opf, def.Cache)
 	return items, cleanup(err)
 }
 

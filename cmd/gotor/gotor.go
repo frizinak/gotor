@@ -61,6 +61,7 @@ type rssFeed struct {
 	Interval flagDuration `yaml:"interval"`
 	Timeout  flagDuration `yaml:"timeout"`
 	Tags     []string     `yaml:"tags"`
+	Cache    int          `yaml:"cache"`
 	Disabled bool         `yaml:"disabled,omitempty"`
 }
 
@@ -756,6 +757,7 @@ Config example:
 						Interval: flagDuration(time.Hour * 2),
 						Timeout:  flagDuration(time.Second * 30),
 						Tags:     []string{"iso"},
+						Cache:    1000,
 					},
 				},
 				RSSFilters: []rssFilter{
