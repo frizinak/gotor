@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -47,10 +49,33 @@ func parseAdd(ctx context.Context, str string) (string, error) {
 
 	var reader io.ReadCloser
 	if strings.HasPrefix(str, "http:") || strings.HasPrefix(str, "https:") {
-		res, err := httpGet(ctx, str, time.Second*60, nil)
+		var redirMagnet string
+		c := &http.Client{
+			Timeout: time.Second * 60,
+			CheckRedirect: func(next *http.Request, via []*http.Request) error {
+				if next.URL.Scheme == "magnet" {
+					redirMagnet = next.URL.String()
+					return errors.New("magnet redirect")
+				}
+				if len(via) >= 8 {
+					return fmt.Errorf("too many redirects")
+				}
+				return nil
+			},
+		}
+
+		res, err := httpGet(ctx, c, str, nil)
+		if redirMagnet != "" {
+			if res != nil {
+				res.Body.Close()
+			}
+			return redirMagnet, nil
+		}
+
 		if err != nil {
 			return "", err
 		}
+
 		reader = res.Body
 	} else {
 		f, err := os.Open(str)
@@ -115,7 +140,7 @@ func add(ctx context.Context, conf addConfig, c api.Client, dir, item string) (a
 			item = item[:m/2] + "..." + item[len(item)-m/2:]
 		}
 
-		return api.Torrent{}, fmt.Errorf("invalid torrent/magnet: '%s'", item)
+		return api.Torrent{}, fmt.Errorf("invalid torrent/magnet: '%s': %w", item, err)
 	}
 
 	var torrent api.Torrent

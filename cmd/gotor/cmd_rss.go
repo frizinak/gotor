@@ -113,7 +113,7 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 		fmt.Fprintf(conf.output, "[INF] Fetching RSS feed '%s'\n", id)
 	}
 
-	res, err := httpGet(ctx, def.URL, time.Duration(def.Timeout), func(r *http.Request) {
+	res, err := httpGet(ctx, &http.Client{Timeout: time.Duration(def.Timeout)}, def.URL, func(r *http.Request) {
 		r.Header.Set("Accept", "application/xml")
 	})
 	if conf.verbose != 0 {

@@ -338,8 +338,7 @@ func (c *wrappedCloser) Close() error {
 	return nil
 }
 
-func httpGet(ctx context.Context, url string, timeout time.Duration, mod func(*http.Request)) (res *http.Response, err error) {
-	c := &http.Client{Timeout: timeout}
+func httpGet(ctx context.Context, c *http.Client, url string, mod func(*http.Request)) (res *http.Response, err error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return res, err
