@@ -31,7 +31,7 @@ func (i *Item) Time() time.Time {
 	return t
 }
 
-func Parse(original, update io.Reader, cache io.Writer) ([]*Item, error) {
+func ParseDiff(original, update io.Reader, cache io.Writer) ([]*Item, error) {
 	i, di := &rss{}, xml.NewDecoder(original)
 	u, du := &rss{}, xml.NewDecoder(update)
 	do := xml.NewEncoder(cache)
@@ -63,4 +63,10 @@ func Parse(original, update io.Reader, cache io.Writer) ([]*Item, error) {
 	slices.SortFunc(items, s)
 
 	return items, do.Encode(u)
+}
+
+func Parse(r io.Reader) ([]*Item, error) {
+	i, di := &rss{}, xml.NewDecoder(r)
+	err := di.Decode(i)
+	return i.Items, err
 }

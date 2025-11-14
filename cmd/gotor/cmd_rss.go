@@ -10,12 +10,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/frizinak/gotor/api"
+	"github.com/frizinak/gotor/bytes"
 	"github.com/frizinak/gotor/rss"
 )
 
@@ -42,6 +44,32 @@ type rssConfig struct {
 	rss        map[string]rssFeed
 	rssFilters []rssFilter
 	sleep      time.Duration
+}
+
+type rssSearchFlags struct {
+	*addFlags
+	yes bool
+}
+
+func (f rssSearchFlags) Parse(uc userConfig, o io.Writer) rssSearchConfig {
+	var c rssSearchConfig
+	c.addConfig = f.addFlags.Parse(uc, o)
+	c.rss = uc.RSS
+	c.yes = f.yes
+	c.cacheDir = filepath.Join(uc.CacheDirectory, "rss")
+	c.prompter.output = o
+
+	return c
+}
+
+type rssSearchConfig struct {
+	addConfig
+
+	prompter prompter
+
+	cacheDir string
+	rss      map[string]rssFeed
+	yes      bool
 }
 
 func rssFilename(dir, name, ext string) string {
@@ -174,7 +202,7 @@ func rssDo(ctx context.Context, id string, conf rssConfig) ([]*rss.Item, error) 
 		return nil, cleanup(err)
 	}
 
-	items, err := rss.Parse(ipf, body, opf)
+	items, err := rss.ParseDiff(ipf, body, opf)
 	return items, cleanup(err)
 }
 
@@ -358,4 +386,73 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 	}
 
 	return nil
+}
+
+func cmdRSSSearch(ctx context.Context, conf rssSearchConfig, c api.Client, q *regexp.Regexp) error {
+	ask := func(item *rss.Item) (yes, ok bool) {
+		ok = true
+		if conf.yes {
+			yes = true
+			return
+		}
+		size := "?"
+		if item.Size != 0 {
+			size = bytes.New(float64(item.Size/1024), bytes.KiB).Human().String()
+		}
+		fmt.Fprintf(conf.output, "Add '%s' [%s]\n", item.Title, size)
+		yes, ok = conf.prompter.YN("Add?", true)
+		return
+	}
+
+	links := make([]string, 0, 1)
+
+	uniq := make(map[string]struct{}, 0)
+	matches := 0
+	for id := range conf.rss {
+		f := rssFilename(conf.cacheDir, id, ".xml")
+		r, err := os.Open(f)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		items, err := rss.Parse(r)
+		r.Close()
+		if err != nil {
+			return err
+		}
+
+		for _, item := range items {
+			if _, ok := uniq[item.Title]; ok {
+				continue
+			}
+			uniq[item.Title] = struct{}{}
+
+			if !q.MatchString(item.Title) {
+				continue
+			}
+
+			matches++
+			yes, ok := ask(item)
+			if !ok {
+				return errors.New("aborted")
+			}
+			if yes {
+				links = append(links, item.Link)
+			}
+		}
+	}
+
+	if matches == 0 {
+		fmt.Fprintln(conf.output, "no torrents match the given regex.")
+		return nil
+	}
+
+	if len(links) == 0 {
+		fmt.Fprintln(conf.output, "no torrents were added.")
+		return nil
+	}
+
+	return cmdAdd(ctx, conf.addConfig, c, links)
 }

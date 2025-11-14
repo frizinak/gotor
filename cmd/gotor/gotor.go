@@ -188,6 +188,16 @@ func saveUserConfig(path string, c userConfig) error {
 	return os.Rename(tmp, path)
 }
 
+func parseCategoryArg(cat string) (labels []string, dir string) {
+	cat = strings.Trim(cat, "/\\")
+	if cat == "" {
+		cat = "/"
+	}
+	dir = cat
+	labels = []string{cat, "gotor"}
+	return
+}
+
 var defaultConfigDirectory func() string
 var defaultCacheDirectory func() string
 
@@ -515,7 +525,7 @@ field by prefixing it with a ^ or !.
 				&removeFlags.yes,
 				"yes",
 				false,
-				"answer yes to all dheletion prompts",
+				"answer yes to all deletion prompts",
 			)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
@@ -641,22 +651,15 @@ field by prefixing it with a ^ or !.
 					return fmt.Errorf("first argument looks like a torrent file")
 				}
 			}
-			if cat != "/" {
-				cat = strings.Trim(args[0], "/\\")
-			}
 
-			conf.downloadPath = cat
-			conf.labels = make([]string, 0, 2)
-			conf.labels = append(conf.labels, "gotor")
-			if cat != "" {
-				conf.labels = append(conf.labels, cat)
-			}
-
+			conf.labels, conf.downloadPath = parseCategoryArg(cat)
 			return cmdAdd(context.Background(), conf, c, args[1:])
 		})
 
 	rssFlags := rssFlags{addFlags: &addFlags, watchFlags: watchFlags}
-	fr.Add("rss").Description("fetch RSS feeds and add torrents based on filters").
+	rssSearchFlags := rssSearchFlags{addFlags: &addFlags}
+	fr.Add("rss").Description("RSS related operations").
+		Add("filter").Description("fetch RSS feeds and add torrents based on filters").
 		Help(func(w io.Writer) {
 			fmt.Fprintln(w, `
 Config example:
@@ -677,12 +680,43 @@ Config example:
 			flagsWatch(f, rssFlags.watchFlags)
 		}).
 		Handler(func(set *flags.Set, args []string) error {
-			c, userConf, err := client(*addFlags.cmdFlags)
+			c, userConf, err := client(*rssFlags.cmdFlags)
 			if err != nil {
 				return err
 			}
 			conf := rssFlags.Parse(userConf, out)
 			return cmdRSS(context.Background(), conf, c)
+		}).
+		Parent().Add("search").Description("search and add torrents within cached RSS feeds").
+		Help(func(w io.Writer) {
+			fmt.Fprintln(w, "- argument 1: the relative destination / label.")
+			fmt.Fprintln(w, "- argument 2: the search regex.")
+		}).
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, rssSearchFlags.cmdFlags)
+
+			f.BoolVar(
+				&rssSearchFlags.yes,
+				"yes",
+				false,
+				"add all matched torrents without prompting",
+			)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			if len(args) != 2 {
+				set.Usage(1)
+			}
+			q, err := regexp.Compile("(?i)" + args[1])
+			if err != nil {
+				return err
+			}
+			c, userConf, err := client(*rssSearchFlags.cmdFlags)
+			if err != nil {
+				return err
+			}
+			conf := rssSearchFlags.Parse(userConf, out)
+			conf.labels, conf.downloadPath = parseCategoryArg(args[0])
+			return cmdRSSSearch(context.Background(), conf, c, q)
 		})
 
 	configCreateFlags := cmdFlags
