@@ -510,7 +510,7 @@ field by prefixing it with a ^ or !.
 		})
 
 	removeFlags := removeFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
-	fr.Add("remove", "delete").Description("remove torrents").
+	fr.Add("remove", "delete", "rm").Description("remove torrents").
 		Define(func(f *flag.FlagSet) {
 			flagsDefault(f, removeFlags.cmdFlags)
 			flagsFilters(f, removeFlags.filterFlags)
