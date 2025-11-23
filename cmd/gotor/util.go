@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/containerd/console"
+	"github.com/frizinak/gotor/api"
 	"gopkg.in/yaml.v3"
 )
 
@@ -369,4 +370,20 @@ func httpGet(ctx context.Context, c *http.Client, url string, mod func(*http.Req
 	}
 
 	return
+}
+
+func abs(ctx context.Context, basedir, dir string, c api.Client) (string, error) {
+	if basedir == "" {
+		if dir == pathRoot {
+			return "", nil
+		}
+
+		info, err := c.Info(ctx)
+		if err != nil {
+			return "", err
+		}
+		basedir = info.DefaultPath
+	}
+
+	return strings.TrimRight(path.Join(basedir, dir), "/\\"), nil
 }

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -19,22 +18,22 @@ import (
 
 type addFlags struct {
 	*cmdFlags
-	downloadDirFlags
+	baseDirFlags
 }
 
 func (f addFlags) Parse(uc userConfig, o io.Writer) addConfig {
 	var c addConfig
 	c.cmdConfig = f.cmdFlags.Parse(uc, o)
-	c.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
+	c.baseDirConfig = f.baseDirFlags.Parse(uc, o)
 	return c
 }
 
 type addConfig struct {
 	cmdConfig
-	downloadDirConfig
+	baseDirConfig
 
-	downloadPath string
-	labels       []string
+	dir    string
+	labels []string
 }
 
 var b64buf = bytes.NewBuffer(nil)
@@ -98,7 +97,7 @@ func parseAdd(ctx context.Context, str string) (string, error) {
 }
 
 func cmdAdd(ctx context.Context, conf addConfig, c api.Client, items []string) error {
-	d, err := addDir(ctx, conf, c)
+	d, err := abs(ctx, conf.baseDir, conf.dir, c)
 	if err != nil {
 		return err
 	}
@@ -113,23 +112,6 @@ func cmdAdd(ctx context.Context, conf addConfig, c api.Client, items []string) e
 	}
 
 	return nil
-}
-
-func addDir(ctx context.Context, conf addConfig, c api.Client) (string, error) {
-	base := conf.downloadDirectory
-	if base == "" {
-		if conf.downloadPath == "/" {
-			return "", nil
-		}
-
-		info, err := c.Info(ctx)
-		if err != nil {
-			return "", err
-		}
-		base = info.DefaultPath
-	}
-
-	return strings.TrimRight(path.Join(base, conf.downloadPath), "/\\"), nil
 }
 
 func add(ctx context.Context, conf addConfig, c api.Client, dir, item string) (api.Torrent, error) {

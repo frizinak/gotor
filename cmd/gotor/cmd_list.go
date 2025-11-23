@@ -437,12 +437,12 @@ type filterFlags struct {
 	added   [2]string
 	updated [2]string
 
-	downloadDirFlags
+	baseDirFlags
 }
 
 func (f filterFlags) Parse(uc userConfig, o io.Writer) (filterConfig, error) {
 	var conf filterConfig
-	conf.downloadDirConfig = f.downloadDirFlags.Parse(uc, o)
+	conf.baseDirConfig = f.baseDirFlags.Parse(uc, o)
 
 	if f, ok := intRange(f.id); ok {
 		conf.id = make(map[string]struct{}, len(f))
@@ -563,11 +563,11 @@ type filterConfig struct {
 	added   [2]*time.Time
 	updated [2]*time.Time
 
-	downloadDirConfig
+	baseDirConfig
 }
 
 func (f filterConfig) Match(t api.Torrent) bool {
-	path := relativeTorrentPath(f.downloadDirectory, t.Path)
+	path := relativeTorrentPath(f.baseDir, t.Path)
 	if f.id != nil {
 		if _, ok := f.id[t.ID]; !ok {
 			return false
@@ -577,7 +577,7 @@ func (f filterConfig) Match(t api.Torrent) bool {
 	{
 		m := len(f.pathNot) == 0
 		for _, r := range f.pathNot {
-			if !(t.Path == f.downloadDirectory && r.MatchString(pathRoot)) &&
+			if !(t.Path == f.baseDir && r.MatchString(pathRoot)) &&
 				!r.MatchString(path) &&
 				!r.MatchString(t.Path) {
 				m = true
@@ -622,7 +622,7 @@ func (f filterConfig) Match(t api.Torrent) bool {
 	}
 
 	for _, r := range f.path {
-		if !(t.Path == f.downloadDirectory && r.MatchString(pathRoot)) &&
+		if !(t.Path == f.baseDir && r.MatchString(pathRoot)) &&
 			!r.MatchString(path) &&
 			!r.MatchString(t.Path) {
 			return false
@@ -809,7 +809,7 @@ main:
 				zebra = false
 				lastPath = t.Path
 
-				relpath := relativeTorrentPath(conf.filters.downloadDirectory, t.Path)
+				relpath := relativeTorrentPath(conf.filters.baseDir, t.Path)
 				fmt.Fprintf(
 					conf.print.writer,
 					"%s%6s %s %s",

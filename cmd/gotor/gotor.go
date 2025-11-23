@@ -46,14 +46,14 @@ type cmdConfig struct {
 	verbose uint8
 }
 
-type downloadDirFlags struct{}
+type baseDirFlags struct{}
 
-func (f downloadDirFlags) Parse(uc userConfig, o io.Writer) downloadDirConfig {
-	return downloadDirConfig{strings.TrimRight(uc.DownloadDirectory, "/\\")}
+func (f baseDirFlags) Parse(uc userConfig, o io.Writer) baseDirConfig {
+	return baseDirConfig{strings.TrimRight(uc.DownloadDir, "/\\")}
 }
 
-type downloadDirConfig struct {
-	downloadDirectory string
+type baseDirConfig struct {
+	baseDir string
 }
 
 type rssFeed struct {
@@ -66,14 +66,14 @@ type rssFeed struct {
 }
 
 type rssFilter struct {
-	Disabled          bool     `yaml:"disabled,omitempty"`
-	Tags              []string `yaml:"tags"`
-	Match             string   `yaml:"match"`
-	Exclude           string   `yaml:"exclude"`
-	Labels            []string `yaml:"labels"`
-	DownloadDirectory string   `yaml:"directory"`
-	MinSize           string   `yaml:"min-size"`
-	MaxSize           string   `yaml:"max-size"`
+	Disabled    bool     `yaml:"disabled,omitempty"`
+	Tags        []string `yaml:"tags"`
+	Match       string   `yaml:"match"`
+	Exclude     string   `yaml:"exclude"`
+	Labels      []string `yaml:"labels"`
+	DownloadDir string   `yaml:"directory"`
+	MinSize     string   `yaml:"min-size"`
+	MaxSize     string   `yaml:"max-size"`
 
 	match   *regexp.Regexp
 	exclude *regexp.Regexp
@@ -120,16 +120,16 @@ func (f *rssFilter) Test(item string, size uint64) bool {
 }
 
 type userConfig struct {
-	TLS               bool               `yaml:"tls"`
-	Host              string             `yaml:"host"`
-	Port              interface{}        `yaml:"port"`
-	User              string             `yaml:"username"`
-	Password          string             `yaml:"password"`
-	RPC               string             `yaml:"rpc-path"`
-	DownloadDirectory string             `yaml:"download-dir"`
-	CacheDirectory    string             `yaml:"cache-directory"`
-	RSS               map[string]rssFeed `yaml:"rss-feeds"`
-	RSSFilters        []rssFilter        `yaml:"rss-filters"`
+	TLS         bool               `yaml:"tls"`
+	Host        string             `yaml:"host"`
+	Port        interface{}        `yaml:"port"`
+	User        string             `yaml:"username"`
+	Password    string             `yaml:"password"`
+	RPC         string             `yaml:"rpc-path"`
+	DownloadDir string             `yaml:"download-dir"`
+	CacheDir    string             `yaml:"cache-directory"`
+	RSS         map[string]rssFeed `yaml:"rss-feeds"`
+	RSSFilters  []rssFilter        `yaml:"rss-filters"`
 }
 
 func (c userConfig) URL() string {
@@ -162,8 +162,8 @@ func loadUserConfig(path string) (userConfig, error) {
 	err = dec.Decode(&c)
 	f.Close()
 
-	if c.CacheDirectory == "" {
-		c.CacheDirectory = defaultCacheDirectory()
+	if c.CacheDir == "" {
+		c.CacheDir = defaultCacheDir()
 	}
 
 	return c, err
@@ -199,16 +199,16 @@ func parseCategoryArg(cat string) (labels []string, dir string) {
 	return
 }
 
-var defaultConfigDirectory func() string
-var defaultCacheDirectory func() string
+var defaultConfigDir func() string
+var defaultCacheDir func() string
 
 func defaultConfigPath() string {
-	return filepath.Join(defaultConfigDirectory(), "config.yml")
+	return filepath.Join(defaultConfigDir(), "config.yml")
 }
 
 func init() {
 	var _config string
-	defaultConfigDirectory = func() string {
+	defaultConfigDir = func() string {
 		if _config != "" {
 			return _config
 		}
@@ -228,7 +228,7 @@ func init() {
 	}
 
 	var _cache string
-	defaultCacheDirectory = func() string {
+	defaultCacheDir = func() string {
 		if _cache != "" {
 			return _cache
 		}
@@ -653,7 +653,7 @@ field by prefixing it with a ^ or !.
 				}
 			}
 
-			conf.labels, conf.downloadPath = parseCategoryArg(cat)
+			conf.labels, conf.dir = parseCategoryArg(cat)
 			return cmdAdd(context.Background(), conf, c, args[1:])
 		})
 
@@ -716,7 +716,7 @@ Config example:
 				return err
 			}
 			conf := rssSearchFlags.Parse(userConf, out)
-			conf.labels, conf.downloadPath = parseCategoryArg(args[0])
+			conf.labels, conf.dir = parseCategoryArg(args[0])
 			return cmdRSSSearch(context.Background(), conf, c, q)
 		})
 
@@ -745,12 +745,12 @@ Config example:
 			_ = os.MkdirAll(dir, 0750)
 
 			c := userConfig{
-				Host:           "localhost",
-				Port:           "9091",
-				User:           "",
-				Password:       "",
-				RPC:            "/transmission/rpc",
-				CacheDirectory: defaultCacheDirectory(),
+				Host:     "localhost",
+				Port:     "9091",
+				User:     "",
+				Password: "",
+				RPC:      "/transmission/rpc",
+				CacheDir: defaultCacheDir(),
 				RSS: map[string]rssFeed{
 					"distrowatch": {
 						URL:      "https://distrowatch.com/news/torrents.xml",
@@ -762,14 +762,14 @@ Config example:
 				},
 				RSSFilters: []rssFilter{
 					{
-						Disabled:          true,
-						Match:             "^arch linux.*\\.iso",
-						Exclude:           "",
-						Labels:            []string{"rss", "linux"},
-						DownloadDirectory: "linux",
-						Tags:              []string{"iso"},
-						MinSize:           "5M",
-						MaxSize:           "5G",
+						Disabled:    true,
+						Match:       "^arch linux.*\\.iso",
+						Exclude:     "",
+						Labels:      []string{"rss", "linux"},
+						DownloadDir: "linux",
+						Tags:        []string{"iso"},
+						MinSize:     "5M",
+						MaxSize:     "5G",
 					},
 				},
 			}

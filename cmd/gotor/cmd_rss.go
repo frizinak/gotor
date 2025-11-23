@@ -30,7 +30,7 @@ func (f rssFlags) Parse(uc userConfig, o io.Writer) rssConfig {
 	c.addConfig = f.addFlags.Parse(uc, o)
 	c.rss = uc.RSS
 	c.rssFilters = uc.RSSFilters
-	c.cacheDir = filepath.Join(uc.CacheDirectory, "rss")
+	c.cacheDir = filepath.Join(uc.CacheDir, "rss")
 	c.sleep = time.Duration(f.watch)
 
 	return c
@@ -55,7 +55,7 @@ func (f rssSearchFlags) Parse(uc userConfig, o io.Writer) rssSearchConfig {
 	c.addConfig = f.addFlags.Parse(uc, o)
 	c.rss = uc.RSS
 	c.yes = f.yes
-	c.cacheDir = filepath.Join(uc.CacheDirectory, "rss")
+	c.cacheDir = filepath.Join(uc.CacheDir, "rss")
 	c.prompter.output = o
 
 	return c
@@ -344,7 +344,7 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 
 		for _, match := range matches {
 			addConfig := conf.addConfig
-			addConfig.downloadPath = match.filter.DownloadDirectory
+			addConfig.dir = match.filter.DownloadDir
 			addConfig.labels = match.filter.Labels
 			addConfig.labels = append(addConfig.labels, "gotor")
 			err := cmdAdd(ctx, addConfig, c, []string{match.Link})
