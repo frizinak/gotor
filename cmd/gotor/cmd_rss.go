@@ -389,7 +389,7 @@ func cmdRSSSearch(ctx context.Context, conf rssSearchConfig, c api.Client, q *re
 		if item.Size != 0 {
 			size = bytes.New(float64(item.Size/1024), bytes.KiB).Human().String()
 		}
-		fmt.Fprintf(conf.output, "Add '%s' [%s]\n", item.Title, size)
+		fmt.Fprintf(conf.output, "'%s' [%s]\n", item.Title, size)
 		yes, ok = conf.prompter.YN("Add?", true)
 		return
 	}
