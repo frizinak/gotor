@@ -7,13 +7,13 @@ import (
 	"github.com/frizinak/gotor/api"
 )
 
-type torrentFlags struct {
+type simpleFlags struct {
 	*cmdFlags
 	*filterFlags
 }
 
-func (f torrentFlags) Parse(uc userConfig, o io.Writer) (torrentConfig, error) {
-	var conf torrentConfig
+func (f simpleFlags) Parse(uc userConfig, o io.Writer) (simpleConfig, error) {
+	var conf simpleConfig
 	var err error
 	conf.cmdConfig = f.cmdFlags.Parse(uc, o)
 	conf.filters, err = f.filterFlags.Parse(uc, o)
@@ -21,13 +21,13 @@ func (f torrentFlags) Parse(uc userConfig, o io.Writer) (torrentConfig, error) {
 	return conf, err
 }
 
-type torrentConfig struct {
+type simpleConfig struct {
 	cmdConfig
 	filters filterConfig
 	print   *printer
 }
 
-func cmdTorrent(ctx context.Context, conf torrentConfig, c api.Client, op func(context.Context, []string) error) error {
+func cmdSimple(ctx context.Context, conf simpleConfig, c api.Client, op func(context.Context, []string) error) error {
 	var zebra bool
 	conf.print.width, _ = termSize()
 	conf.print.writer = conf.output

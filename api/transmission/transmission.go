@@ -252,6 +252,14 @@ func (c *Client) Stop(ctx context.Context, ids []string) error {
 	return c.simple(ctx, ids, c.rpc.TorrentStopIDs)
 }
 
+func (c *Client) Move(ctx context.Context, ids []string, dir string) error {
+	idns, err := idint64(ids)
+	if err != nil {
+		return err
+	}
+	return c.rpc.TorrentSetLocation(ctx, idns, dir, true)
+}
+
 const x = 1
 
 const (

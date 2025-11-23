@@ -40,6 +40,7 @@ type Client interface {
 	Verify(ctx context.Context, ids []string) error
 	Start(ctx context.Context, ids []string) error
 	Stop(ctx context.Context, ids []string) error
+	Move(ctx context.Context, ids []string, dir string) error
 }
 
 type ErrNoSuchTorrent struct {

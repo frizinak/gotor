@@ -551,7 +551,7 @@ field by prefixing it with a ^ or !.
 			)
 		})
 
-	torrentFlags := torrentFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
+	torrentFlags := simpleFlags{cmdFlags: cmdFlags, filterFlags: filterFlags}
 	type torrentOp func(context.Context, []string) error
 	torrentHandler := func(set *flags.Set, args []string, op func(api.Client) torrentOp) error {
 		if len(args) != 0 {
@@ -568,7 +568,7 @@ field by prefixing it with a ^ or !.
 			return err
 		}
 
-		return cmdTorrent(
+		return cmdSimple(
 			context.Background(),
 			conf,
 			c,
@@ -655,6 +655,34 @@ field by prefixing it with a ^ or !.
 
 			conf.labels, conf.dir = parseCategoryArg(cat)
 			return cmdAdd(context.Background(), conf, c, args[1:])
+		})
+
+	moveFlags := moveFlags{simpleFlags: torrentFlags}
+	fr.Add("move").Description("move torrents").
+		Help(func(w io.Writer) {
+			fmt.Fprintln(w, "- argument 1:   the relative destination / label.")
+		}).
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, moveFlags.cmdFlags)
+			flagsFilters(f, moveFlags.filterFlags)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			if len(args) != 1 {
+				set.Usage(1)
+			}
+
+			c, userConf, err := client(*moveFlags.cmdFlags)
+			if err != nil {
+				return err
+			}
+
+			conf, err := moveFlags.Parse(userConf, out)
+			if err != nil {
+				return err
+			}
+
+			_, conf.dir = parseCategoryArg(args[0])
+			return cmdMove(context.Background(), conf, c)
 		})
 
 	rssFlags := rssFlags{addFlags: &addFlags, watchFlags: watchFlags}
