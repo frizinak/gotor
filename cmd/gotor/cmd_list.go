@@ -112,18 +112,6 @@ func (p *printer) print(zebra bool, t api.Torrent) {
 		up = t.UploadSpeed.Human().Format("%6.2f %-3s")
 	}
 
-	name := t.Name
-	if p.width > 0 {
-		const s = 1
-		const b = 1
-		cw := 6 + s + 3 + s + b + 17 + b + s + s + 5 + s + 11 + s + b + 2 + s + 2 + b + s + b + 10 + s + 10 + b
-		rem := p.width - 1 - cw
-		if rem < 2 {
-			name = ""
-		}
-		name = runewidth.FillRight(runewidth.Truncate(name, rem, "…"), p.width-cw)
-	}
-
 	sclr := ""
 	pclr := ""
 	rclr := p.color(clrRow, zebra)
@@ -145,25 +133,119 @@ func (p *printer) print(zebra bool, t api.Torrent) {
 	status = pad(status, 11)
 	done := int(t.Done * 100)
 
-	fmt.Fprintf(
-		p.writer,
-		"%s%6s %s%3d%s [%17s] %s %5.2f %s%s%s [%-2d %2d] [%10s %10s]%s\n",
-		rclr,
-		t.ID,
-		pclr,
-		done,
-		rclr,
-		size,
-		name,
-		t.Ratio,
-		sclr,
-		status,
-		rclr,
-		upPeers, dnPeers,
-		up, dn,
-		p.color(clrNone, zebra),
-	)
+	var format string
+	var fields []interface{}
 
+	trimname := func(cw int) string {
+		name := t.Name
+		rem := p.width - 1 - cw
+		if rem < 2 {
+			name = ""
+		}
+		name = runewidth.FillRight(runewidth.Truncate(name, rem, "…"), p.width-cw)
+		return name
+	}
+
+	switch {
+	case p.width < 60:
+		format = "%s%6s %s%3d%s %s %s%s%s %s\n"
+		fields = []interface{}{
+			rclr,
+			t.ID,
+			pclr,
+			done,
+			rclr,
+			trimname(81 - 8 - 6 - 7 - 13 - 23),
+			sclr,
+			status,
+			rclr,
+			p.color(clrNone, zebra),
+		}
+	case p.width < 80:
+		format = "%s%6s %s%3d%s %s %s%s%s [%10s %10s]%s\n"
+		fields = []interface{}{
+			rclr,
+			t.ID,
+			pclr,
+			done,
+			rclr,
+			trimname(81 - 8 - 6 - 7 - 13),
+			sclr,
+			status,
+			rclr,
+			up, dn,
+			p.color(clrNone, zebra),
+		}
+	case p.width < 100:
+		format = "%s%6s %s%3d%s [%10s] %s %s%s%s [%10s %10s]%s\n"
+		fields = []interface{}{
+			rclr,
+			t.ID,
+			pclr,
+			done,
+			rclr,
+			t.Have.Human().Format("%6.2f %3s"),
+			trimname(81 - 8 - 6 - 7),
+			sclr,
+			status,
+			rclr,
+			up, dn,
+			p.color(clrNone, zebra),
+		}
+	case p.width < 120:
+		format = "%s%6s %s%3d%s [%17s] %s %s%s%s [%10s %10s]%s\n"
+		fields = []interface{}{
+			rclr,
+			t.ID,
+			pclr,
+			done,
+			rclr,
+			size,
+			trimname(81 - 8 - 6),
+			sclr,
+			status,
+			rclr,
+			up, dn,
+			p.color(clrNone, zebra),
+		}
+	case p.width < 140:
+		format = "%s%6s %s%3d%s [%17s] %s %5.2f %s%s%s [%10s %10s]%s\n"
+		fields = []interface{}{
+			rclr,
+			t.ID,
+			pclr,
+			done,
+			rclr,
+			size,
+			trimname(81 - 8),
+			t.Ratio,
+			sclr,
+			status,
+			rclr,
+			up, dn,
+			p.color(clrNone, zebra),
+		}
+	default:
+		format = "%s%6s %s%3d%s [%17s] %s %5.2f %s%s%s [%-2d %2d] [%10s %10s]%s\n"
+		fields = []interface{}{
+			rclr,
+			t.ID,
+			pclr,
+			done,
+			rclr,
+			size,
+			trimname(81),
+			t.Ratio,
+			sclr,
+			status,
+			rclr,
+			upPeers, dnPeers,
+			up, dn,
+			p.color(clrNone, zebra),
+		}
+	}
+
+	fmt.Fprintf(p.writer, format, fields...)
 	if p.showError && t.Error != "" {
 		e := strings.Split(runewidth.Wrap(t.Error, 80-8), "\n")
 		for _, l := range e {
@@ -750,9 +832,6 @@ func cmdList(ctx context.Context, conf listConfig, c api.Client) error {
 			lastRun := time.Now()
 			if l.err != nil {
 				tch <- l
-				if conf.sleep == 0 {
-					break
-				}
 				if doSleep(lastRun) != nil {
 					break
 				}
@@ -762,10 +841,6 @@ func cmdList(ctx context.Context, conf listConfig, c api.Client) error {
 			l.d = lastRun
 			slices.SortStableFunc(l.l, conf.sort.Sort())
 			tch <- l
-			if conf.sleep == 0 {
-				break
-			}
-
 			if doSleep(lastRun) != nil {
 				break
 			}
@@ -857,14 +932,13 @@ main:
 		const self = 0
 		fmt.Fprintf(
 			conf.print.writer,
-			"%s%-10s [%6.2f %10s] %s %s [%-2d %2d] [%10s %10s]%s\n",
+			"%s%-10s [%6.2f %10s] %s %s [%10s %10s]%s\n",
 			conf.print.color(clrRow, !zebra),
 			"Total:",
 			have.Convert(total.Unit()).Value,
 			total.Format("%6.2f %3s"),
 			since,
-			pad("", conf.print.width-10-2-6-1-10-1-1-len(since)-1-self-1-1-2-1-2-1-1-1-10-1-10-1),
-			upPeers, dnPeers,
+			pad("", conf.print.width-10-2-6-1-10-1-1-len(since)-1-self-1-1-10-1-10-1),
 			up.Convert(bytes.MiB).Format("%6.2f %3s"),
 			dn.Convert(bytes.MiB).Format("%6.2f %3s"),
 			conf.print.color(clrNone, !zebra),
@@ -888,7 +962,7 @@ main:
 			if list.err == nil {
 				items = list.l
 			}
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Second * 2):
 		}
 	}
 
