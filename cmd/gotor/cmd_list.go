@@ -21,17 +21,18 @@ import (
 const pathRoot = "/"
 
 var statusFilterMap = map[string]api.Status{
-	"stall": api.StatusStalled,
-	"stop":  api.StatusStopped,
-	"queue": api.StatusDownloadQueue,
-	"down":  api.StatusDownloading,
-	"seed":  api.StatusSeeding,
-	"done":  api.StatusFinished,
-	"check": api.StatusChecking,
-	"100%":  api.StatusDownloaded,
-	"have":  api.StatusDownloaded,
-	"meta":  api.StatusMeta,
-	"error": api.StatusError,
+	"stall":  api.StatusStalled,
+	"stop":   api.StatusStopped,
+	"queue":  api.StatusDownloadQueue,
+	"down":   api.StatusDownloading,
+	"seed":   api.StatusSeeding,
+	"done":   api.StatusFinished,
+	"check":  api.StatusChecking,
+	"100%":   api.StatusDownloaded,
+	"have":   api.StatusDownloaded,
+	"meta":   api.StatusMeta,
+	"error":  api.StatusError,
+	"verify": api.StatusVerify,
 }
 
 type color uint8
@@ -132,6 +133,9 @@ func (p *printer) print(zebra bool, t api.Torrent) {
 
 	status = pad(status, 11)
 	done := int(t.Done * 100)
+	if t.Recheck != 0.0 {
+		done = int(t.Recheck * 100)
+	}
 
 	var format string
 	var fields []interface{}

@@ -323,7 +323,7 @@ var _fields = map[string][maxEndpoints]int{
 	"queuePosition":           {detail: x, list: 0},
 	"rateDownload":            {detail: x, list: x},
 	"rateUpload":              {detail: x, list: x},
-	"recheckProgress":         {detail: x, list: 0},
+	"recheckProgress":         {detail: x, list: x},
 	"secondsDownloading":      {detail: x, list: 0},
 	"secondsSeeding":          {detail: x, list: 0},
 	"seedIdleLimit":           {detail: x, list: 0},
@@ -363,12 +363,13 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 		Magnet: pv(t.MagnetLink),
 		Labels: t.Labels,
 
-		ETA:   time.Second * time.Duration(pv(t.ETA)),
-		Have:  bytes.New(float64(haveValid/1024), bytes.KiB),
-		Total: bytes.New(float64(sizeWhenDone/1024), bytes.KiB),
-		Done:  meta/100 + pv(t.PercentDone)*.99,
-		Sent:  bytes.New(float64(pv(t.UploadedEver)/1024), bytes.KiB),
-		Ratio: ratio,
+		ETA:     time.Second * time.Duration(pv(t.ETA)),
+		Have:    bytes.New(float64(haveValid/1024), bytes.KiB),
+		Total:   bytes.New(float64(sizeWhenDone/1024), bytes.KiB),
+		Done:    meta/100 + pv(t.PercentDone)*.99,
+		Recheck: pv(t.RecheckProgress),
+		Sent:    bytes.New(float64(pv(t.UploadedEver)/1024), bytes.KiB),
+		Ratio:   ratio,
 
 		Error: pv(t.ErrorString),
 
@@ -415,6 +416,9 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 	}
 	if t.Error != nil && *t.Error != 0 {
 		ti.Status |= api.StatusError
+	}
+	if pv(t.RecheckProgress) != 0 {
+		ti.Status |= api.StatusVerify
 	}
 
 	return ti

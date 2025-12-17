@@ -65,6 +65,8 @@ func (s Status) Evaluate() (string, Evaluation) {
 	switch {
 	case s.And(StatusError):
 		return statusNames[StatusError], Bad
+	case s.And(StatusVerify):
+		return statusNames[StatusVerify], Good
 	case s.And(StatusFinished):
 		return statusNames[StatusFinished], Good
 	case s.And(StatusStopped | StatusDownloaded):
@@ -110,6 +112,7 @@ const (
 	StatusDownloading
 	StatusDownloaded
 	StatusFinished
+	StatusVerify
 )
 
 var statusNames = map[Status]string{
@@ -125,10 +128,12 @@ var statusNames = map[Status]string{
 	StatusSeeding:       "seed",
 	StatusFinished:      "done",
 	StatusError:         "error",
+	StatusVerify:        "verify",
 }
 
 var statusOrder = []Status{
 	StatusError,
+	StatusVerify,
 	StatusFinished,
 	StatusStopped,
 	StatusDownloadQueue,
@@ -151,12 +156,13 @@ type Torrent struct {
 	Magnet string
 	Labels []string
 
-	ETA   time.Duration
-	Have  bytes.Bytes
-	Total bytes.Bytes
-	Done  float64
-	Sent  bytes.Bytes
-	Ratio float64
+	ETA     time.Duration
+	Have    bytes.Bytes
+	Total   bytes.Bytes
+	Done    float64
+	Recheck float64
+	Sent    bytes.Bytes
+	Ratio   float64
 
 	Status        Status
 	Error         string
