@@ -398,40 +398,69 @@ func cmdRSSSearch(ctx context.Context, conf rssSearchConfig, c api.Client, q *re
 
 	uniq := make(map[string]struct{}, 0)
 	matches := 0
-	for id := range conf.rss {
-		f := rssFilename(conf.cacheDir, id, ".xml")
-		r, err := os.Open(f)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
+	type opt struct {
+		*rss.Item
+		url string
+	}
+	opts := make(chan *rss.Item, 100)
+	var stop bool
+	var gerr error
+	go func() {
+	out:
+		for id := range conf.rss {
+			f := rssFilename(conf.cacheDir, id, ".xml")
+			r, err := os.Open(f)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				gerr = err
+				break out
 			}
-			return err
-		}
-		items, err := rss.Parse(r)
-		r.Close()
-		if err != nil {
-			return err
-		}
+			items, err := rss.Parse(r)
+			r.Close()
+			if err != nil {
+				gerr = err
+				break out
+			}
+			if stop {
+				break
+			}
 
-		for _, item := range items {
-			if _, ok := uniq[item.Title]; ok {
-				continue
-			}
-			uniq[item.Title] = struct{}{}
+			for _, item := range items {
+				if stop {
+					break out
+				}
+				if _, ok := uniq[item.Title]; ok {
+					continue
+				}
+				uniq[item.Title] = struct{}{}
+				if !q.MatchString(item.Title) {
+					continue
+				}
 
-			if !q.MatchString(item.Title) {
-				continue
-			}
-
-			matches++
-			yes, ok := ask(item)
-			if !ok {
-				return errors.New("aborted")
-			}
-			if yes {
-				links = append(links, item.Link)
+				matches++
+				opts <- item
 			}
 		}
+		close(opts)
+	}()
+
+	for item := range opts {
+		yes, ok := ask(item)
+		if !ok {
+			stop = true
+			for range opts {
+			}
+			return errors.New("aborted")
+		}
+		if yes {
+			links = append(links, item.Link)
+		}
+	}
+
+	if gerr != nil {
+		return gerr
 	}
 
 	if matches == 0 {
