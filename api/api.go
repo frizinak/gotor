@@ -41,6 +41,7 @@ type Client interface {
 	Start(ctx context.Context, ids []string) error
 	Stop(ctx context.Context, ids []string) error
 	Move(ctx context.Context, ids []string, dir string) error
+	Limit(ctx context.Context, up, down bytes.Bytes) error
 }
 
 type ErrNoSuchTorrent struct {

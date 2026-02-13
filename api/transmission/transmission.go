@@ -260,6 +260,34 @@ func (c *Client) Move(ctx context.Context, ids []string, dir string) error {
 	return c.rpc.TorrentSetLocation(ctx, idns, dir, true)
 }
 
+func (c *Client) Limit(ctx context.Context, up, down bytes.Bytes) error {
+	u := up.Convert(bytes.KiB).Value
+	d := down.Convert(bytes.KiB).Value
+	args := rpc.SessionArguments{
+		AltSpeedTimeEnabled: ptr(false),
+		AltSpeedEnabled:     ptr(false),
+		SpeedLimitUp:        ptr(u),
+		SpeedLimitDown:      ptr(d),
+	}
+
+	args.SpeedLimitUpEnabled = ptr(u >= 0.001)
+	args.SpeedLimitDownEnabled = ptr(d >= 0.001)
+
+	return c.rpc.SessionArgumentsSet(ctx, args)
+
+	// args := rpc.SessionArguments{
+	// 	AltSpeedTimeEnabled: &f,
+	// 	AltSpeedEnabled:     &t,
+	// 	AltSpeedDown:        &d,
+	// 	AltSpeedUp:          &u,
+	// }
+
+	// if u == 0 && d == 0 {
+	// 	args.AltSpeedEnabled = &f
+	// 	args.AltSpeedUp, args.AltSpeedDown = nil, nil
+	// }
+}
+
 const x = 1
 
 const (

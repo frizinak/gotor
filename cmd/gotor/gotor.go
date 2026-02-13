@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -60,17 +61,17 @@ type rssFeed struct {
 	URL      string       `yaml:"url"`
 	Interval flagDuration `yaml:"interval"`
 	Timeout  flagDuration `yaml:"timeout"`
-	Tags     []string     `yaml:"tags"`
+	Tags     []string     `yaml:"tags,flow"`
 	Cache    int          `yaml:"cache"`
 	Disabled bool         `yaml:"disabled,omitempty"`
 }
 
 type rssFilter struct {
 	Disabled    bool     `yaml:"disabled,omitempty"`
-	Tags        []string `yaml:"tags"`
+	Tags        []string `yaml:"tags,flow"`
 	Match       string   `yaml:"match"`
 	Exclude     string   `yaml:"exclude"`
-	Labels      []string `yaml:"labels"`
+	Labels      []string `yaml:"labels,flow"`
 	DownloadDir string   `yaml:"directory"`
 	MinSize     string   `yaml:"min-size"`
 	MaxSize     string   `yaml:"max-size"`
@@ -119,6 +120,181 @@ func (f *rssFilter) Test(item string, size uint64) bool {
 		(f.exclude == nil || !f.exclude.MatchString(item))
 }
 
+type weekday time.Weekday
+
+const (
+	mon = weekday(time.Monday)
+	tue = weekday(time.Tuesday)
+	wed = weekday(time.Wednesday)
+	thu = weekday(time.Thursday)
+	fri = weekday(time.Friday)
+	sat = weekday(time.Saturday)
+	sun = weekday(time.Sunday)
+)
+
+func (w *weekday) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+
+	s = strings.ToLower(strings.TrimSpace(s))
+
+	weekdays := map[string]weekday{
+		"mo":        mon,
+		"mon":       mon,
+		"monday":    mon,
+		"tu":        tue,
+		"tue":       tue,
+		"tuesday":   tue,
+		"we":        wed,
+		"wed":       wed,
+		"wednesday": wed,
+		"th":        thu,
+		"thu":       thu,
+		"thursday":  thu,
+		"fr":        fri,
+		"fri":       fri,
+		"friday":    fri,
+		"sa":        sat,
+		"sat":       sat,
+		"saturday":  sat,
+		"su":        sun,
+		"sun":       sun,
+		"sunday":    sun,
+	}
+
+	day, ok := weekdays[s]
+	if !ok {
+		return fmt.Errorf("invalid weekday: %s", s)
+	}
+
+	*w = weekday(day)
+	return nil
+}
+
+func (w weekday) MarshalYAML() (interface{}, error) {
+	switch w {
+	case mon:
+		return "mon", nil
+	case tue:
+		return "tue", nil
+	case wed:
+		return "wed", nil
+	case thu:
+		return "thu", nil
+	case fri:
+		return "fri", nil
+	case sat:
+		return "sat", nil
+	case sun:
+		return "sun", nil
+	}
+
+	return nil, fmt.Errorf("invalid weekday value: %d", w)
+}
+
+type unit struct{ bytes.Bytes }
+
+func (u *unit) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+	b, err := bytes.Parse(s)
+	*u = unit{b}
+	return err
+}
+
+func (u unit) MarshalYAML() (interface{}, error) {
+	return u.Human().String(), nil
+}
+
+type timeOfDay struct {
+	Hour   int
+	Minute int
+}
+
+func (t *timeOfDay) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+
+	parsed, err := time.Parse("15:04", s)
+	if err != nil {
+		return fmt.Errorf("invalid time format: %s (expected HH:MM)", s)
+	}
+
+	t.Hour = parsed.Hour()
+	t.Minute = parsed.Minute()
+	return nil
+}
+
+func (t timeOfDay) MarshalYAML() (interface{}, error) {
+	return fmt.Sprintf("%02d:%02d", t.Hour, t.Minute), nil
+}
+
+type schedule struct {
+	Disabled bool       `yaml:"disabled"`
+	DoW      []weekday  `yaml:"days_of_week,omitempty,flow"`
+	DoM      []uint     `yaml:"days_of_month,omitempty,flow"`
+	Start    *timeOfDay `yaml:"time_begin"`
+	End      *timeOfDay `yaml:"time_end"`
+	LimitDn  unit       `yaml:"down"`
+	LimitUp  unit       `yaml:"up"`
+}
+
+func (s schedule) Applies(t time.Time) bool {
+	if s.Disabled {
+		return false
+	}
+
+	if s.DoW != nil {
+		matched := false
+		c := weekday(t.Weekday())
+		for _, d := range s.DoW {
+			if d == c {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	if s.DoM != nil {
+		matched := false
+		c := uint(t.Day())
+		for _, d := range s.DoM {
+			if d == c {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	ct := timeOfDay{Hour: t.Hour(), Minute: t.Minute()}
+	cm := ct.Hour*60 + ct.Minute
+	var sm, em int
+	if s.Start != nil {
+		sm = s.Start.Hour*60 + s.Start.Minute
+	}
+	if s.End != nil {
+		em = s.End.Hour*60 + s.End.Minute
+	}
+
+	if em < sm {
+		return cm >= sm || cm <= em
+	}
+
+	return (s.Start == nil || cm >= sm) && (s.End == nil || cm <= em)
+}
+
 type userConfig struct {
 	TLS         bool               `yaml:"tls"`
 	Host        string             `yaml:"host"`
@@ -128,6 +304,7 @@ type userConfig struct {
 	RPC         string             `yaml:"rpc-path"`
 	DownloadDir string             `yaml:"download-dir"`
 	CacheDir    string             `yaml:"cache-directory"`
+	Schedule    []schedule         `yaml:"schedule"`
 	RSS         map[string]rssFeed `yaml:"rss-feeds"`
 	RSSFilters  []rssFilter        `yaml:"rss-filters"`
 }
@@ -169,6 +346,12 @@ func loadUserConfig(path string) (userConfig, error) {
 	return c, err
 }
 
+func writeUserConfig(w io.Writer, c userConfig) error {
+	enc := yaml.NewEncoder(w)
+	enc.SetIndent(2)
+	return enc.Encode(c)
+}
+
 func saveUserConfig(path string, c userConfig) error {
 	c.Port = fmt.Sprintf("%v", c.Port)
 
@@ -177,9 +360,7 @@ func saveUserConfig(path string, c userConfig) error {
 	if err != nil {
 		return err
 	}
-	enc := yaml.NewEncoder(f)
-	enc.SetIndent(2)
-	err = enc.Encode(c)
+	err = writeUserConfig(f, c)
 	f.Close()
 	if err != nil {
 		os.Remove(tmp)
@@ -748,6 +929,81 @@ Config example:
 			return cmdRSSSearch(context.Background(), conf, c, q)
 		})
 
+	schedulerFlags := cmdFlags
+	fr.Add("scheduler").Description("run the speed limiting scheduler").
+		Define(func(f *flag.FlagSet) {
+			flagsDefault(f, schedulerFlags)
+		}).
+		Handler(func(set *flags.Set, args []string) error {
+			if len(args) != 0 {
+				set.Usage(1)
+			}
+
+			c, userConf, err := client(*schedulerFlags)
+			if err != nil {
+				return err
+			}
+
+			scheds := make([]schedule, 0, len(userConf.Schedule))
+			for _, s := range userConf.Schedule {
+				if !s.Disabled {
+					scheds = append(scheds, s)
+				}
+			}
+			if len(scheds) == 0 {
+				return errors.New("no schedules to apply")
+			}
+
+			ctx := context.Background()
+			lastUp, lastDn := math.Inf(1), math.Inf(1)
+			for {
+				now := time.Now()
+				up, dn := math.Inf(1), math.Inf(1)
+				for _, s := range scheds {
+					if s.Applies(now) {
+						if u := s.LimitUp.Convert(bytes.KiB).Value; u != 0 {
+							up = min(up, u)
+						}
+						if d := s.LimitDn.Convert(bytes.KiB).Value; d != 0 {
+							dn = min(dn, d)
+						}
+					}
+				}
+
+				if math.IsInf(up, 1) {
+					up = 0
+				}
+				if math.IsInf(dn, 1) {
+					dn = 0
+				}
+
+				if up != lastUp || dn != lastDn {
+					fmt.Fprintf(
+						out,
+						"up: %s | dn: %s\n",
+						bytes.New(up, bytes.KiB).Human().String(),
+						bytes.New(dn, bytes.KiB).Human().String(),
+					)
+					err := c.Limit(
+						ctx,
+						bytes.New(up, bytes.KiB),
+						bytes.New(dn, bytes.KiB),
+					)
+					if err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						time.Sleep(5 * time.Minute)
+						continue
+					}
+					lastUp = up
+					lastDn = dn
+				}
+
+				time.Sleep(time.Minute)
+			}
+
+			return nil
+		})
+
 	configCreateFlags := cmdFlags
 	fr.Add("config").Add("create").Description("create default config file").
 		Define(func(f *flag.FlagSet) {
@@ -762,15 +1018,15 @@ Config example:
 			if configCreateFlags.config != "" {
 				confPath = configCreateFlags.config
 			}
+			save := true
 			_, err := loadUserConfig(confPath)
 			if err == nil {
-				return fmt.Errorf("config '%s' already exists", confPath)
+				save = false
+				fmt.Fprintf(os.Stderr, "config '%s' already exists.\n\n", confPath)
 			}
-			if !os.IsNotExist(err) {
+			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
-			dir := filepath.Dir(confPath)
-			_ = os.MkdirAll(dir, 0750)
 
 			c := userConfig{
 				Host:     "localhost",
@@ -779,6 +1035,24 @@ Config example:
 				Password: "",
 				RPC:      "/transmission/rpc",
 				CacheDir: defaultCacheDir(),
+				Schedule: []schedule{
+					schedule{
+						Disabled: true,
+						DoW:      []weekday{sat, sun},
+						Start:    &timeOfDay{17, 0},
+						End:      &timeOfDay{23, 59},
+						LimitDn:  unit{bytes.New(44.5, bytes.MiB)},
+						LimitUp:  unit{bytes.New(2, bytes.MiB)},
+					},
+					schedule{
+						Disabled: true,
+						DoM:      []uint{1, 2, 3},
+						Start:    &timeOfDay{17, 0},
+						End:      &timeOfDay{23, 59},
+						LimitDn:  unit{bytes.New(44.5, bytes.MiB)},
+						LimitUp:  unit{bytes.New(2, bytes.MiB)},
+					},
+				},
 				RSS: map[string]rssFeed{
 					"distrowatch": {
 						URL:      "https://distrowatch.com/news/torrents.xml",
@@ -802,6 +1076,12 @@ Config example:
 				},
 			}
 
+			if !save {
+				return writeUserConfig(out, c)
+			}
+
+			dir := filepath.Dir(confPath)
+			_ = os.MkdirAll(dir, 0750)
 			err = saveUserConfig(confPath, c)
 			if err != nil {
 				return err

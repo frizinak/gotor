@@ -353,22 +353,22 @@ func cmdInfoTransmission(mode detailMode, p *detailPrinter, i api.Info, t rpc.To
 			honorsRateLimits = p.msg.yes
 			if i.DownloadLimit != nil {
 				dlLimitEnabled = p.msg.yes
-				dlLimit = i.DownloadLimit.Human().Format("%3.0f %s/s (global)")
+				dlLimit = i.DownloadLimit.Human().Format("%5.2f %s/s (global)")
 			}
 			if i.UploadLimit != nil {
 				upLimitEnabled = p.msg.yes
-				upLimit = i.UploadLimit.Human().Format("%3.0f %s/s (global)")
+				upLimit = i.UploadLimit.Human().Format("%5.2f %s/s (global)")
 			}
 		}
 
 		if pv(t.DownloadLimited) {
 			dlLimitEnabled = p.msg.yes
-			dlLimit = p.bytes(pv(t.DownloadLimit), bytes.KiB, bytes.KiB).Format("%3.0f %s/s")
+			dlLimit = p.bytes(pv(t.DownloadLimit), bytes.KiB, bytes.KiB).Format("%5.2f %s/s")
 		}
 
 		if pv(t.UploadLimited) {
 			upLimitEnabled = p.msg.yes
-			upLimit = p.bytes(pv(t.UploadLimit), bytes.KiB, bytes.KiB).Format("%3.0f %s/s")
+			upLimit = p.bytes(pv(t.UploadLimit), bytes.KiB, bytes.KiB).Format("%5.2f %s/s")
 		}
 	}
 	var honorsIdleLimits string = p.msg.no

@@ -16,3 +16,7 @@ func pv[X any](val *X) X {
 
 	return *val
 }
+
+func ptr[T any](v T) *T {
+	return &v
+}
