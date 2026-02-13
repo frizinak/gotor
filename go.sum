@@ -4,6 +4,8 @@ github.com/containerd/console v1.0.5 h1:R0ymNeydRqH2DmakFNdmjR2k0t7UPuiOV/N/27/q
 github.com/containerd/console v1.0.5/go.mod h1:YynlIjWYF8myEu6sdkwKIvGQq+cOckRm6So2avqoYAk=
 github.com/frizinak/transmissionrpc v0.1.1 h1:U6HGdUvciglO4UueHD4GiFWNn7ZD+zIB7Xl6v3ZejWk=
 github.com/frizinak/transmissionrpc v0.1.1/go.mod h1:sinuC2YCkPVk228o1TEqyLN3kdWej7tk1P8fhVirVoc=
+github.com/frizinak/transmissionrpc v0.1.2 h1:N178NlmiTcgFszd726uaRjG2/PSsvtT9k1GkepH/bUk=
+github.com/frizinak/transmissionrpc v0.1.2/go.mod h1:sinuC2YCkPVk228o1TEqyLN3kdWej7tk1P8fhVirVoc=
 github.com/hashicorp/go-cleanhttp v0.5.2 h1:035FKYIWjmULyFRBKPs8TBQoi0x6d9G4xc9neXJWAZQ=
 github.com/hashicorp/go-cleanhttp v0.5.2/go.mod h1:kO/YDlP8L1346E6Sodw+PrpBSV4/SoxCXGY6BqNFT48=
 github.com/jackpal/bencode-go v1.0.2 h1:LcCNfZ344u0LpBPOZNjpCLps/wUOuN4r87Fy9+5yU8g=
