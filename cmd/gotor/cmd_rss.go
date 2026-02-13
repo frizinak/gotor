@@ -318,7 +318,8 @@ func cmdRSS(ctx context.Context, conf rssConfig, c api.Client) error {
 				if conf.verbose > 2 {
 					fmt.Fprintf(
 						conf.output,
-						"[DBG] New RSS entry: '%s'\n",
+						"[DBG] New RSS entry in '%s': '%s'\n",
+						r.id,
 						item.Title,
 					)
 				}
