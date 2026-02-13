@@ -51,8 +51,18 @@ func ParseDiff(original, update io.Reader, cache io.Writer, cacheAmount int) ([]
 		uniq[item.Title] = item
 		uniq2[item.Title] = item
 	}
+
+	var oldest *Item
 	for _, item := range i.Items {
+		if oldest == nil || item.Time().Before(oldest.Time()) {
+			oldest = item
+		}
 		delete(uniq, item.Title)
+	}
+	for _, item := range uniq {
+		if item.Time().Before(oldest.Time()) {
+			delete(uniq, item.Title)
+		}
 	}
 
 	if cacheAmount > 0 {
