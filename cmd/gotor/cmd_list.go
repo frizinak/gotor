@@ -27,7 +27,7 @@ var statusFilterMap = map[string]api.Status{
 	"down":   api.StatusDownloading,
 	"seed":   api.StatusSeeding,
 	"done":   api.StatusFinished,
-	"check":  api.StatusChecking,
+	"check":  api.StatusVerifyQueue,
 	"100%":   api.StatusDownloaded,
 	"have":   api.StatusDownloaded,
 	"meta":   api.StatusMeta,

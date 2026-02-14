@@ -425,9 +425,9 @@ func raw2Torrent(t rpc.Torrent) api.Torrent {
 	case rpc.TorrentStatusStopped:
 		ti.Status |= api.StatusStopped
 	case rpc.TorrentStatusCheckWait:
-		ti.Status |= api.StatusChecking
+		ti.Status |= api.StatusVerifyQueue
 	case rpc.TorrentStatusCheck:
-		ti.Status |= api.StatusChecking
+		ti.Status |= api.StatusVerifyQueue
 	case rpc.TorrentStatusDownloadWait:
 		ti.Status |= api.StatusDownloadQueue
 	case rpc.TorrentStatusDownload:
