@@ -64,10 +64,16 @@ const (
 
 func (s Status) Evaluate() (string, Evaluation) {
 	switch {
-	case s.And(StatusError):
-		return statusNames[StatusError], Bad
+	case s.And(StatusError | StatusVerify):
+		return statusNames[StatusVerify], Bad
+	case s.And(StatusError | StatusChecking):
+		return statusNames[StatusChecking], Bad
 	case s.And(StatusVerify):
 		return statusNames[StatusVerify], Good
+	case s.And(StatusChecking):
+		return statusNames[StatusChecking], Good
+	case s.And(StatusError):
+		return statusNames[StatusError], Bad
 	case s.And(StatusFinished):
 		return statusNames[StatusFinished], Good
 	case s.And(StatusStopped | StatusDownloaded):
